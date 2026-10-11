@@ -1,27 +1,11 @@
 import assert from 'node:assert/strict';
-import { access, readFile, realpath } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createProgram } from '../dist/index.js';
 
-// The same tests run in the monorepo (apps/cli, skill at ../../skills) and in the
-// exported public repo (skill at ./skills), so resolve whichever layout is present.
-async function firstExisting(...candidates) {
-  for (const candidate of candidates) {
-    const path = fileURLToPath(new URL(candidate, import.meta.url));
-    try {
-      await access(path);
-      return path;
-    } catch {}
-  }
-  return null;
-}
-
-const skillPath = await firstExisting('../skills/mailly/SKILL.md', '../../../skills/mailly/SKILL.md');
-const cliReadmePath = fileURLToPath(new URL('../README.md', import.meta.url));
-// Only the monorepo has apps/cli two levels up; the public repo has no root README to check.
-const insideMonorepo = Boolean(await firstExisting('../../../apps/cli/package.json'));
-const monorepoReadmePath = insideMonorepo ? fileURLToPath(new URL('../../../README.md', import.meta.url)) : null;
+const skillPath = fileURLToPath(new URL('../skills/mailly/SKILL.md', import.meta.url));
+const readmePaths = ['../README.md', '../docs/commands.zh-CN.md'].map((path) => fileURLToPath(new URL(path, import.meta.url)));
 const packagePath = fileURLToPath(new URL('../package.json', import.meta.url));
 const cliBinPath = fileURLToPath(new URL('../bin/mailly.mjs', import.meta.url));
 
@@ -77,19 +61,18 @@ test('Mailly Skill never bypasses the CLI with authenticated REST calls', async 
 });
 
 test('Mailly docs install the published mailly-cli package, not private sources', async () => {
-  const [skill, cliReadme, rootReadme, packageJson] = await Promise.all([
+  const [skill, packageJson, ...readmes] = await Promise.all([
     readFile(skillPath, 'utf8'),
-    readFile(cliReadmePath, 'utf8'),
-    monorepoReadmePath ? readFile(monorepoReadmePath, 'utf8') : '',
     readFile(packagePath, 'utf8').then(JSON.parse),
+    ...readmePaths.map((path) => readFile(path, 'utf8')),
   ]);
-  const docs = `${skill}\n${cliReadme}\n${rootReadme}`;
+  const docs = [skill, ...readmes].join('\n');
   assert.equal(packageJson.name, 'mailly-cli');
   assert.equal(packageJson.private, undefined);
-  assert.match(`${skill}\n${cliReadme}`, /npm install -g mailly-cli/);
+  assert.match(`${skill}\n${readmes[0]}`, /npm install -g mailly-cli/);
   assert.doesNotMatch(docs, /@mailly\/cli/);
-  // The monorepo is private; public docs must not point users at it.
-  assert.doesNotMatch(`${skill}\n${cliReadme}`, /fatwang2\/mailly|\/Volumes\/|monorepo/i);
+  // The Mailly service repo is private; public docs must not point users at it or at local paths.
+  assert.doesNotMatch(docs, /fatwang2\/mailly|\/Volumes\/|monorepo/i);
   assert.equal(await realpath(cliBinPath), cliBinPath);
 });
 
