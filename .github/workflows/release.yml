@@ -1,0 +1,45 @@
+name: Release
+
+# Push a tag like v0.3.0 to publish. npm authenticates this workflow through
+# trusted publishing (OIDC), so no npm token is stored in the repository.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Verify tag matches package and CLI versions
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node -e "
+            const { version } = require('./package.json');
+            const source = require('fs').readFileSync('src/index.ts', 'utf8');
+            if (process.env.RELEASE_TAG !== 'v' + version) throw new Error('Tag must be v' + version);
+            if (!source.includes(\"const VERSION = '\" + version + \"'\")) throw new Error('src/index.ts VERSION must be ' + version);
+          "
+      - run: npm test
+      - run: npm publish --provenance --access public
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes
