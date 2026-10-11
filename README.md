@@ -1,6 +1,6 @@
 # mailly-cli
 
-English | [简体中文](README.zh-CN.md)
+English | [简体中文](docs/commands.zh-CN.md)
 
 The command-line interface for [Mailly](https://mailly.site): two-way inboxes, sending, templates, campaigns, workflows, and agent drafts from your terminal or your AI agent. It wraps the [Mailly HTTP API](https://api.mailly.site/docs).
 
@@ -64,7 +64,7 @@ In order of precedence:
 | `preferences`, `marketing-settings` | Recipient subscription state and marketing footer identity |
 | `domains`, `dns`, `code` | Custom domains, DNS provider tokens, and verification codes |
 
-The full command reference is in [README.zh-CN.md](README.zh-CN.md).
+The full command reference (Chinese) is in [docs/commands.zh-CN.md](docs/commands.zh-CN.md).
 
 ## JSON output for scripts and agents
 

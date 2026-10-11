@@ -1,8 +1,8 @@
 # mailly-cli
 
-[English](README.md) | 简体中文
+[English](../README.md) | 简体中文
 
-[Mailly](https://mailly.site) 官方命令行工具，封装 [Mailly API](https://api.mailly.site/docs) 的用户端能力：收发邮件、验证码、查询余额、管理域名与收件箱。配套的 Agent Skill 在 [`skills/mailly/SKILL.md`](skills/mailly/SKILL.md)。
+[Mailly](https://mailly.site) 官方命令行工具，封装 [Mailly API](https://api.mailly.site/docs) 的用户端能力：收发邮件、验证码、查询余额、管理域名与收件箱。配套的 Agent Skill 在 [`skills/mailly/SKILL.md`](../skills/mailly/SKILL.md)。
 
 ## 安装
 
@@ -531,7 +531,7 @@ Contact 以 `external_id` 为业务身份：新事件和 `contacts upsert` 可�
 
 ## 让 AI Agent 自动调用 mailly（Claude Code Skill）
 
-仓库提供了 [`skills/mailly/SKILL.md`](skills/mailly/SKILL.md)，里面写好了：
+仓库提供了 [`skills/mailly/SKILL.md`](../skills/mailly/SKILL.md)，里面写好了：
 
 - 何时触发（用户提到发邮件 / 验证码 / 余额 / 域名 / Mailly 时）；
 - 完整命令速查、参数和注意事项；

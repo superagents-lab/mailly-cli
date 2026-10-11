@@ -26,7 +26,7 @@ import { registerOutbox } from './commands/outbox.js';
 import { registerAgents } from './commands/agents.js';
 import { registerDrafts } from './commands/drafts.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 
 export function createProgram() {
   const program = new Command();
