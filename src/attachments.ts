@@ -45,14 +45,14 @@ function mimeTypeFor(path: string): string {
 function parseInlineSpec(spec: string): { contentId: string; path: string } {
   const separator = spec.indexOf('=');
   if (separator <= 0 || separator === spec.length - 1) {
-    throw new Error('--inline 格式必须是 <content-id=path>');
+    throw new Error('--inline must use the format <content-id=path>');
   }
   const contentId = spec.slice(0, separator).trim().replace(/^<+|>+$/g, '');
   const path = spec.slice(separator + 1).trim();
   if (!contentId || /[\s\r\n<>]/.test(contentId) || contentId.length > 200) {
-    throw new Error('--inline 的 content-id 必须是不含空白或尖括号的短标识');
+    throw new Error('The --inline content-id must be a short identifier without whitespace or angle brackets');
   }
-  if (!path) throw new Error('--inline 必须指定文件路径');
+  if (!path) throw new Error('--inline requires a file path');
   return { contentId, path };
 }
 
@@ -65,26 +65,26 @@ export async function loadEmailAttachments(
     ...inlineSpecs.map((spec) => parseInlineSpec(spec)),
   ];
   if (inputs.length > MAX_ATTACHMENTS) {
-    throw new Error(`附件最多 ${MAX_ATTACHMENTS} 个`);
+    throw new Error(`At most ${MAX_ATTACHMENTS} attachments are allowed`);
   }
 
   let totalBytes = 0;
   const attachments: EmailAttachmentPayload[] = [];
   for (const input of inputs) {
     const stat = await fs.stat(input.path).catch((error: NodeJS.ErrnoException) => {
-      throw new Error(`无法读取附件 ${input.path}: ${error.message}`);
+      throw new Error(`Could not read attachment ${input.path}: ${error.message}`);
     });
-    if (!stat.isFile()) throw new Error(`附件路径不是普通文件: ${input.path}`);
-    if (stat.size === 0) throw new Error(`附件不能为空文件: ${input.path}`);
+    if (!stat.isFile()) throw new Error(`Attachment path is not a regular file: ${input.path}`);
+    if (stat.size === 0) throw new Error(`Attachment cannot be an empty file: ${input.path}`);
     totalBytes += stat.size;
     if (totalBytes > MAX_TOTAL_BYTES) {
-      throw new Error('附件解码后总大小不能超过 6MB');
+      throw new Error('Attachments cannot exceed 6MB in total after decoding');
     }
     const bytes = await fs.readFile(input.path);
     // Re-check the bytes actually read in case the file changed after stat().
     totalBytes += bytes.byteLength - stat.size;
     if (totalBytes > MAX_TOTAL_BYTES) {
-      throw new Error('附件解码后总大小不能超过 6MB');
+      throw new Error('Attachments cannot exceed 6MB in total after decoding');
     }
     attachments.push({
       filename: basename(input.path),

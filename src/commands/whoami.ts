@@ -6,7 +6,7 @@ import { c, getOutputFormat, info, printJSON } from '../output.js';
 export function registerWhoami(program: Command) {
   program
     .command('whoami')
-    .description('显示当前登录信息（脱敏 API Key、Base URL、余额）')
+    .description('Show the current login (masked API key, base URL, balance)')
     .action(async (_opts, command) => {
       const globalOpts = command.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -23,8 +23,8 @@ export function registerWhoami(program: Command) {
         });
         return;
       }
-      info(`API Key: ${c.cyan(maskKey(auth.apiKey))} ${c.dim(`(来自 ${auth.source})`)}`);
+      info(`API Key: ${c.cyan(maskKey(auth.apiKey))} ${c.dim(`(from ${auth.source})`)}`);
       info(`Base URL: ${c.cyan(auth.baseUrl)}`);
-      info(`余额 (USD): ${c.green(String(res.balance))}`);
+      info(`Balance (USD): ${c.green(String(res.balance))}`);
     });
 }

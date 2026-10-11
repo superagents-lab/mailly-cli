@@ -9,11 +9,11 @@ function fmtUnix(seconds: number): string {
 }
 
 export function registerDomains(program: Command) {
-  const domains = program.command('domains').description('自定义域名收发能力管理');
+  const domains = program.command('domains').description('Manage sending and receiving on custom domains');
 
   domains
     .command('list', { isDefault: true })
-    .description('列出当前账户的域名归属、SES 发件和 MX 收件状态')
+    .description('List domain ownership, SES sending, and MX receiving status for this account')
     .action(async (_opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -25,7 +25,7 @@ export function registerDomains(program: Command) {
         return;
       }
       if (!res.domains.length) {
-        info('暂无可用发件域名');
+        info('No sender domains available');
         return;
       }
       const rows = res.domains.map((d) => [
@@ -35,16 +35,16 @@ export function registerDomains(program: Command) {
           d.status === 'verified' ? 'verified' : d.status === 'rejected' ? 'rejected' : 'not_configured'
         ),
         d.inboundStatus ?? 'not_configured',
-        d.isDefault ? '是' : '否',
+        d.isDefault ? 'yes' : 'no',
         fmtUnix(d.createdAt),
       ]);
-      printTable(['域名', '归属状态', '发件状态', '收件状态', '默认', '创建时间'], rows);
+      printTable(['Domain', 'Ownership', 'Sending', 'Receiving', 'Default', 'Created at'], rows);
     });
 
   domains
     .command('add')
-    .description('提交自定义域名归属申请（通过后可分别配置发件或收件）')
-    .argument('<domain>', '域名，例如 mail.example.com')
+    .description('Submit a custom domain for ownership review (then set up sending and/or receiving)')
+    .argument('<domain>', 'Domain, for example mail.example.com')
     .action(async (domain: string, _opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -56,27 +56,27 @@ export function registerDomains(program: Command) {
         return;
       }
       if (!res.success) {
-        throw new Error(res.error || '提交失败');
+        throw new Error(res.error || 'Submission failed');
       }
-      success(res.message || '已提交');
+      success(res.message || 'Submitted');
       if (res.domain) {
-        info(`  域名 ID: ${c.cyan(res.domain.id)}`);
-        info(`  状态: ${res.domain.status}`);
-        info('  下一步: 等待域名归属审核。审核通过后可分别配置发件或收件：');
-        info('    一键配置（Cloudflare）: mailly dns set-token 后运行 '
+        info(`  Domain ID: ${c.cyan(res.domain.id)}`);
+        info(`  Status: ${res.domain.status}`);
+        info('  Next: wait for the domain ownership review. Once approved, set up sending and/or receiving:');
+        info('    One step (Cloudflare): after mailly dns set-token, run '
           + `mailly domains apply-dns ${res.domain.id}`);
-        info(`    手动发件: mailly domains setup-outbound ${res.domain.id}`);
-        info('    手动收件: 在 Cloudflare 或实际 DNS 服务商添加 MX（Target smtp.mailly.site，优先级 10）');
-        info(`            然后运行 mailly domains verify-inbound ${res.domain.id}`);
-        info(`  收件验证通过后: mailly inbox addresses create --domain ${domain.trim().toLowerCase()} --prefix <前缀>`);
-        info('  只收件不需要配置 SES；发件需要把 SES 返回的 CNAME 加到 DNS。修改根域名 MX 会影响该域名的全部收件。');
+        info(`    Sending, manually: mailly domains setup-outbound ${res.domain.id}`);
+        info('    Receiving, manually: add an MX record in Cloudflare or your actual DNS provider (target smtp.mailly.site, priority 10)');
+        info(`            then run mailly domains verify-inbound ${res.domain.id}`);
+        info(`  After receiving is verified: mailly inbox addresses create --domain ${domain.trim().toLowerCase()} --prefix <prefix>`);
+        info('  Receiving only does not need SES; sending needs the CNAME records returned by SES added to DNS. Changing the root domain MX affects all mail received on that domain.');
       }
     });
 
   domains
     .command('verify-inbound')
-    .description('检查自定义域名的 MX 是否已指向 Mailly')
-    .argument('<domain-id>', 'sender-domains list 返回的域名 ID')
+    .description('Check whether the custom domain MX points to Mailly')
+    .argument('<domain-id>', 'Domain ID from mailly domains list')
     .action(async (domainId: string, _opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -87,24 +87,24 @@ export function registerDomains(program: Command) {
         printJSON(res);
         return;
       }
-      if (!res.success) throw new Error(res.error || 'MX 检查失败');
+      if (!res.success) throw new Error(res.error || 'MX check failed');
       if (res.ready) {
-        success(res.message || '收信 MX 已验证');
+        success(res.message || 'Inbound MX verified');
         return;
       }
-      info(res.message || 'MX 尚未就绪');
+      info(res.message || 'MX is not ready yet');
       if (res.expectedMx) {
         info(`  MX ${res.expectedMx.priority} ${res.expectedMx.exchange}`);
-        info('  请在 Cloudflare「DNS → Records → Add record」或实际 DNS 服务商中添加；根域名的 Name 通常填 @。');
-        info('  若根域名已有企业邮箱 MX，请改用独立子域名，避免接管现有收件。');
+        info('  Add it in Cloudflare (DNS → Records → Add record) or your actual DNS provider; for the root domain the Name is usually @.');
+        info('  If the root domain already has a business email MX, use a separate subdomain so existing mail is not taken over.');
       }
       if (res.error) info(`  ${res.error}`);
     });
 
   domains
     .command('setup-outbound')
-    .description('为已通过归属审核的域名创建 SES 发件身份，并返回需要添加的 DNS 记录')
-    .argument('<domain-id>', 'sender-domains list 返回的域名 ID')
+    .description('Create an SES sending identity for an approved domain and return the DNS records to add')
+    .argument('<domain-id>', 'Domain ID from mailly domains list')
     .action(async (domainId: string, _opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -115,20 +115,20 @@ export function registerDomains(program: Command) {
         printJSON(res);
         return;
       }
-      if (!res.success) throw new Error(res.error || '启用发件失败');
+      if (!res.success) throw new Error(res.error || 'Failed to enable sending');
       if (res.ready) {
-        success(res.message || '发件已启用');
+        success(res.message || 'Sending enabled');
         return;
       }
-      info(res.message || '请添加 SES 发件 DNS 记录');
+      info(res.message || 'Add the SES sending DNS records');
       printOutboundDns(res.outboundDnsRecords);
-      info(`  保存后运行: mailly domains verify-outbound ${domainId}`);
+      info(`  After saving, run: mailly domains verify-outbound ${domainId}`);
     });
 
   domains
     .command('verify-outbound')
-    .description('检查 SES 是否已验证该域名的 DKIM 发件记录')
-    .argument('<domain-id>', 'sender-domains list 返回的域名 ID')
+    .description('Check whether SES has verified the domain DKIM sending records')
+    .argument('<domain-id>', 'Domain ID from mailly domains list')
     .action(async (domainId: string, _opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -139,22 +139,22 @@ export function registerDomains(program: Command) {
         printJSON(res);
         return;
       }
-      if (!res.success) throw new Error(res.error || '发件检查失败');
+      if (!res.success) throw new Error(res.error || 'Sending check failed');
       if (res.ready) {
-        success(res.message || '发件已启用');
+        success(res.message || 'Sending enabled');
         return;
       }
-      info(res.message || 'SES 尚未验证发件记录');
+      info(res.message || 'SES has not verified the sending records yet');
       printOutboundDns(res.outboundDnsRecords);
       if (res.error) info(`  ${res.error}`);
     });
 
   domains
     .command('apply-dns')
-    .description('用已保存的 Cloudflare Token 一键写入该域名所需的 DNS 记录（幂等，可重复运行）')
-    .argument('<domain-id>', 'sender-domains list 返回的域名 ID')
-    .option('--scope <scope>', '配置范围：all（默认）、outbound（仅发件）、inbound（仅收件）')
-    .option('--token <token>', '一次性使用指定的 Cloudflare Token（不保存到服务端）')
+    .description('Write the DNS records this domain needs using the saved Cloudflare token (idempotent, safe to rerun)')
+    .argument('<domain-id>', 'Domain ID from mailly domains list')
+    .option('--scope <scope>', 'Scope: all (default), outbound (sending only), inbound (receiving only)')
+    .option('--token <token>', 'Use this Cloudflare token once (not saved on the server)')
     .action(async (domainId: string, opts: { scope?: string; token?: string }, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const scope = opts.scope && ['all', 'outbound', 'inbound'].includes(opts.scope)
@@ -168,16 +168,16 @@ export function registerDomains(program: Command) {
         printJSON(res);
         return;
       }
-      if (!res.success && !res.results?.length) throw new Error(res.error || '一键配置 DNS 失败');
+      if (!res.success && !res.results?.length) throw new Error(res.error || 'DNS setup failed');
 
       const outcomeLabel: Record<string, string> = {
-        created: '新建',
-        existing: '已存在',
-        conflict: '冲突',
-        failed: '失败',
+        created: 'created',
+        existing: 'exists',
+        conflict: 'conflict',
+        failed: 'failed',
       };
       printTable(
-        ['记录', '结果', '说明'],
+        ['Record', 'Result', 'Details'],
         res.results.map((record) => [
           record.priority != null
             ? `${record.type} ${record.priority} ${record.name}`
@@ -190,9 +190,9 @@ export function registerDomains(program: Command) {
         success(res.message);
       } else {
         info(res.message);
-        info('  存在冲突的记录未被修改。请到 Cloudflare DNS 页面确认后再处理（例如已有其他 MX 的根域名建议改用子域名）。');
+        info('  Conflicting records were left unchanged. Review them on the Cloudflare DNS page first (for example, use a subdomain if the root domain already has another MX).');
       }
-      info(`  DNS 生效需要几分钟，稍后运行: mailly domains verify-outbound ${domainId} / mailly domains verify-inbound ${domainId}`);
+      info(`  DNS takes a few minutes to propagate. Then run: mailly domains verify-outbound ${domainId} / mailly domains verify-inbound ${domainId}`);
     });
 }
 
@@ -205,14 +205,14 @@ function printOutboundDns(records?: Array<{
   required: boolean;
 }>) {
   if (!records?.length) return;
-  info('  请在 Cloudflare「DNS → Records → Add record」或实际 DNS 服务商中添加（CNAME 必须关闭代理）：');
+  info('  Add these in Cloudflare (DNS → Records → Add record) or your actual DNS provider (CNAME records must not be proxied):');
   printTable(
-    ['类型', '名称 / Host', '值', '用途'],
+    ['Type', 'Name / Host', 'Value', 'Purpose'],
     records.map((record) => [
       record.priority != null ? `${record.type} ${record.priority}` : record.type,
       record.host,
       record.value,
-      record.required ? `${record.purpose}（必填）` : `${record.purpose}（建议）`,
+      record.required ? `${record.purpose} (required)` : `${record.purpose} (recommended)`,
     ]),
   );
 }

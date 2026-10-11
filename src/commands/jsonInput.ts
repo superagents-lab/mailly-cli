@@ -11,6 +11,6 @@ export async function readJsonInput(path: string): Promise<unknown> {
   try {
     return JSON.parse(source);
   } catch (error) {
-    throw new Error(`无法解析 JSON (${path}): ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Could not parse JSON (${path}): ${error instanceof Error ? error.message : String(error)}`);
   }
 }

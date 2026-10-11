@@ -24,7 +24,7 @@ export async function readConfig(): Promise<Config> {
     if (parsed && typeof parsed === 'object') return parsed;
   } catch (err: any) {
     if (err.code !== 'ENOENT') {
-      throw new Error(`读取配置文件失败 (${configPath()}): ${err.message}`);
+      throw new Error(`Failed to read config file (${configPath()}): ${err.message}`);
     }
   }
   return {};
@@ -81,7 +81,7 @@ export async function resolveAuth(opts: {
 
   if (!apiKey && opts.required !== false) {
     throw new Error(
-      '未找到 API Key。请运行 `mailly login <api-key>`，或设置环境变量 MAILLY_API_KEY，或使用 --api-key <key>。'
+      'No API key found. Run `mailly login` (or `mailly login <api-key>`), set the MAILLY_API_KEY environment variable, or pass --api-key <key>.'
     );
   }
 

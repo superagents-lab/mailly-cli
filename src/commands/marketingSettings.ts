@@ -11,28 +11,28 @@ async function clientFor(command: Command): Promise<MaillyClient> {
 }
 
 export function registerMarketingSettings(program: Command) {
-  const settings = program.command('marketing-settings').description('配置 Marketing Footer 品牌信息');
+  const settings = program.command('marketing-settings').description('Configure the marketing footer brand details');
 
   settings
     .command('show', { isDefault: true })
     .action(async (_opts, command) => {
       const res = await (await clientFor(command)).getMarketingSettings();
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.settings) return info('尚未配置 Marketing Footer 品牌信息');
-      info(`品牌名称: ${res.settings.brandName}`);
-      info(`邮寄地址: ${res.settings.postalAddress}`);
+      if (!res.settings) return info('Marketing footer brand details are not configured');
+      info(`Brand name: ${res.settings.brandName}`);
+      info(`Postal address: ${res.settings.postalAddress}`);
     });
 
   settings
     .command('set')
-    .requiredOption('--brand-name <name>', '品牌名称')
-    .requiredOption('--postal-address <address>', '有效邮寄地址')
+    .requiredOption('--brand-name <name>', 'Brand name')
+    .requiredOption('--postal-address <address>', 'Valid postal address')
     .action(async (opts, command) => {
       const res = await (await clientFor(command)).updateMarketingSettings({
         brandName: opts.brandName,
         postalAddress: opts.postalAddress,
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      success('Marketing Footer 品牌信息已更新');
+      success('Marketing footer brand details updated');
     });
 }

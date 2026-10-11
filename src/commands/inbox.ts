@@ -11,24 +11,24 @@ const INBOX_BODY_FORMATS = ['text', 'markdown', 'html'] as const;
 
 function parseInboxBodyFormat(value: string): InboxBodyFormat {
   if (INBOX_BODY_FORMATS.includes(value as InboxBodyFormat)) return value as InboxBodyFormat;
-  throw new Error(`正文格式只能是 ${INBOX_BODY_FORMATS.join(' / ')}`);
+  throw new Error(`Body format must be one of ${INBOX_BODY_FORMATS.join(' / ')}`);
 }
 
 function parseInboxFolder(value: string): string {
   if (value === 'inbox' || value === 'quarantine') return value;
-  throw new Error('folder 只能是 inbox / quarantine');
+  throw new Error('folder must be inbox or quarantine');
 }
 
 function parsePositiveInteger(value: string): number {
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error('必须是正整数');
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error('must be a positive integer');
   return parsed;
 }
 
 const INBOX_SEARCH_LABELS = {
-  sender: '按发件人搜索；--match fuzzy 时也匹配显示名',
-  query: '跨收件人、发件人、显示名和主题模糊搜索（不含正文）',
-  time: '收件时间',
+  sender: 'Search by sender; with --match fuzzy it also matches the display name',
+  query: 'Fuzzy search across recipient, sender, display name, and subject (not the body)',
+  time: 'Received time',
 };
 
 function formatTimestamp(value?: number | null): string {
@@ -42,32 +42,32 @@ function truncate(value: string | null | undefined, max = 48): string {
 
 function printMessage(message: InboxMessage) {
   info(`ID: ${message.id}`);
-  info(`会话: ${message.thread_id}`);
-  info(`方向: ${message.direction}`);
-  info(`发件人: ${message.from_name ? `${message.from_name} <${message.from_address}>` : message.from_address}`);
-  // 回复默认发给 Reply-To 而不是 From，只在两者不同时提示，避免误判回复对象。
+  info(`Thread: ${message.thread_id}`);
+  info(`Direction: ${message.direction}`);
+  info(`From: ${message.from_name ? `${message.from_name} <${message.from_address}>` : message.from_address}`);
+  // Replies go to Reply-To rather than From by default; show it only when they differ so the reply target is clear.
   if (message.reply_to_address && message.reply_to_address !== message.from_address) {
-    info(`回复至: ${message.reply_to_address}`);
+    info(`Reply-To: ${message.reply_to_address}`);
   }
-  info(`收件人: ${message.to_address}`);
-  info(`主题: ${message.subject || '(无主题)'}`);
-  info(`时间: ${formatTimestamp(message.received_at)}`);
-  info(`已读: ${message.is_read ? '是' : '否'}`);
-  if (message.folder) info(`文件夹: ${message.folder}`);
-  if (message.quarantine_reason) info(`隔离原因: ${message.quarantine_reason}`);
-  if (message.authentication_json) info(`收件验证: ${message.authentication_json}`);
+  info(`To: ${message.to_address}`);
+  info(`Subject: ${message.subject || '(no subject)'}`);
+  info(`Time: ${formatTimestamp(message.received_at)}`);
+  info(`Read: ${message.is_read ? 'yes' : 'no'}`);
+  if (message.folder) info(`Folder: ${message.folder}`);
+  if (message.quarantine_reason) info(`Quarantine reason: ${message.quarantine_reason}`);
+  if (message.authentication_json) info(`Authentication: ${message.authentication_json}`);
   if (message.text_body) info(`\n${message.text_body}`);
   else if (message.html_body) info(`\n${message.html_body}`);
 }
 
 async function readOptionalFile(inline: string | undefined, path: string | undefined, label: string) {
-  if (inline && path) throw new Error(`${label} 与对应的文件参数不能同时使用`);
+  if (inline && path) throw new Error(`${label} cannot be combined with its file option`);
   return path ? fs.readFile(path, 'utf8') : inline;
 }
 
 function readStateFromOptions(opts: { read?: boolean; unread?: boolean }): boolean {
   if (Boolean(opts.read) === Boolean(opts.unread)) {
-    throw new Error('必须且只能指定 --read 或 --unread');
+    throw new Error('Specify exactly one of --read or --unread');
   }
   return Boolean(opts.read);
 }
@@ -80,17 +80,17 @@ async function clientFor(command: Command): Promise<MaillyClient> {
 }
 
 export function registerInbox(program: Command) {
-  const inbox = program.command('inbox').description('管理收件地址、正文与收件 Webhook');
-  const addresses = inbox.command('addresses').description('收件地址管理');
+  const inbox = program.command('inbox').description('Manage inbox addresses, messages, and the inbound webhook');
+  const addresses = inbox.command('addresses').description('Manage inbox addresses');
 
   addresses
     .command('list', { isDefault: true })
-    .description('列出当前账户的收件地址和可用域名')
+    .description('List inbox addresses and available domains for this account')
     .action(async (_opts, command) => {
       const res = await (await clientFor(command)).listInboxAddresses();
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.addresses.length) return info('暂无收件地址');
-      printTable(['ID', '地址', '邮件数', '创建时间'], res.addresses.map((address) => [
+      if (!res.addresses.length) return info('No inbox addresses');
+      printTable(['ID', 'Address', 'Messages', 'Created at'], res.addresses.map((address) => [
         address.id,
         address.address,
         String(address.message_count),
@@ -100,60 +100,60 @@ export function registerInbox(program: Command) {
 
   addresses
     .command('create')
-    .description('在已启用 MX 收件的域名上创建地址')
-    .requiredOption('--domain <domain>', '已完成归属验证和 MX 验证的域名')
-    .option('--prefix <prefix>', '地址前缀；省略时由服务端随机生成')
+    .description('Create an address on a domain with MX inbound enabled')
+    .requiredOption('--domain <domain>', 'Domain that has passed ownership and MX verification')
+    .option('--prefix <prefix>', 'Address prefix; the server generates a random one if omitted')
     .action(async (opts: { domain: string; prefix?: string }, command) => {
       const res = await (await clientFor(command)).createInboxAddress({
         domain: opts.domain.trim().toLowerCase(),
         ...(opts.prefix?.trim() ? { prefix: opts.prefix.trim().toLowerCase() } : {}),
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.address) throw new Error(res.error || '创建收件地址失败');
-      success(`收件地址 ${res.address.address} 已创建`);
+      if (!res.address) throw new Error(res.error || 'Failed to create inbox address');
+      success(`Inbox address ${res.address.address} created`);
     });
 
   addresses
     .command('delete')
-    .description('删除收件地址及其全部邮件和附件')
-    .argument('<address-id>', '收件地址 ID')
-    .requiredOption('--yes', '确认永久删除该地址及其全部邮件和附件')
+    .description('Delete an inbox address with all its messages and attachments')
+    .argument('<address-id>', 'Inbox address ID')
+    .requiredOption('--yes', 'Confirm permanently deleting the address with all its messages and attachments')
     .action(async (addressId: string, _opts: { yes: boolean }, command: Command) => {
       const res = await (await clientFor(command)).deleteInboxAddress(addressId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`收件地址 ${addressId} 及其邮件已删除`);
+      success(`Inbox address ${addressId} and its messages deleted`);
     });
 
-  const messages = inbox.command('messages').description('读取收件邮件');
+  const messages = inbox.command('messages').description('Read inbound messages');
 
   addMailSearchOptions(messages
     .command('list', { isDefault: true })
-    .description('分页列出或搜索邮件摘要；读取不会修改已读状态')
-    .option('--address-id <id>', '只查看指定收件地址')
-    .option('--limit <n>', '返回条数', parsePositiveInteger)
-    .option('--cursor <cursor>', '服务端返回的下一页游标')
-    .option('--folder <folder>', 'inbox / quarantine（默认 inbox）', parseInboxFolder)
-    .option('--sender-domain <domain>', '按发件人域名筛选（忽略大小写的整域名匹配，不含子域名；走索引）'), INBOX_SEARCH_LABELS)
+    .description('List or search message summaries page by page; reading does not change read state')
+    .option('--address-id <id>', 'Only show this inbox address')
+    .option('--limit <n>', 'Number of results', parsePositiveInteger)
+    .option('--cursor <cursor>', 'Next-page cursor returned by the server')
+    .option('--folder <folder>', 'inbox / quarantine (default inbox)', parseInboxFolder)
+    .option('--sender-domain <domain>', 'Filter by sender domain (case-insensitive exact domain match, subdomains excluded; indexed)'), INBOX_SEARCH_LABELS)
     .action(async (opts: InboxListOptions, command) => {
       const res = await (await clientFor(command)).listInboxMessages(opts);
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.messages.length) return info('暂无邮件');
-      printTable(['时间', '状态', '方向', '发件人', '收件人', '主题', 'ID'], res.messages.map((message) => [
+      if (!res.messages.length) return info('No messages');
+      printTable(['Time', 'Status', 'Direction', 'From', 'To', 'Subject', 'ID'], res.messages.map((message) => [
         formatTimestamp(message.received_at),
-        message.direction === 'outbound' ? '-' : (message.is_read ? '已读' : '未读'),
+        message.direction === 'outbound' ? '-' : (message.is_read ? 'read' : 'unread'),
         message.direction,
         truncate(message.from_address, 30),
         truncate(message.to_address, 30),
         truncate(message.subject),
         message.id,
       ]));
-      if (res.cursor) info(`下一页 cursor: ${res.cursor}`);
+      if (res.cursor) info(`Next page cursor: ${res.cursor}`);
     });
 
   messages
     .command('show')
-    .description('查看单封邮件详情；读取不会修改已读状态')
-    .argument('<message-id>', '邮件 ID')
+    .description('Show one message; reading does not change read state')
+    .argument('<message-id>', 'Message ID')
     .action(async (messageId: string, _opts, command) => {
       const res = await (await clientFor(command)).getInboxMessage(messageId);
       if (getOutputFormat() === 'json') return printJSON(res);
@@ -162,26 +162,26 @@ export function registerInbox(program: Command) {
 
   messages
     .command('release')
-    .description('将隔离邮件恢复到收件箱；不重放 Webhook 或自动触发 Agent')
-    .argument('<message-id>', '邮件 ID')
-    .requiredOption('--yes', '确认已检查邮件并恢复到收件箱')
+    .description('Restore a quarantined message to the inbox; does not replay webhooks or trigger agents')
+    .argument('<message-id>', 'Message ID')
+    .requiredOption('--yes', 'Confirm you reviewed the message and want it restored to the inbox')
     .action(async (messageId: string, _opts, command) => {
       const res = await (await clientFor(command)).releaseInboxMessage(messageId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`邮件 ${messageId} 已恢复到收件箱`);
+      success(`Message ${messageId} restored to the inbox`);
     });
 
   messages
     .command('content')
-    .description('无副作用地读取一封邮件的正文')
-    .argument('<message-id>', '邮件 ID')
+    .description('Read the body of one message without side effects')
+    .argument('<message-id>', 'Message ID')
     .option(
       '--format <format>',
-      '正文格式：text / markdown / html（默认 text）',
+      'Body format: text / markdown / html (default text)',
       parseInboxBodyFormat,
       'text',
     )
-    .option('--strip-quotes', '去掉发件人客户端附带的引用历史')
+    .option('--strip-quotes', 'Strip quoted reply history added by mail clients')
     .action(async (
       messageId: string,
       opts: { format: InboxBodyFormat; stripQuotes?: boolean },
@@ -193,19 +193,19 @@ export function registerInbox(program: Command) {
       });
       if (getOutputFormat() === 'json') return printJSON(res);
       const content = res.content[opts.format];
-      if (content == null) return info(`该邮件没有可用的 ${opts.format} 正文`);
+      if (content == null) return info(`This message has no ${opts.format} body`);
       info(content);
       if (opts.stripQuotes && res.content.quotes_stripped === false) {
-        warn('未可靠识别引用历史，已返回完整正文');
+        warn('Could not reliably detect quoted history; returning the full body');
       }
     });
 
   messages
     .command('read-state')
-    .description('显式设置单封入站邮件的已读状态')
-    .argument('<message-id>', '邮件 ID')
-    .option('--read', '标记为已读')
-    .option('--unread', '标记为未读')
+    .description('Set the read state of one inbound message')
+    .argument('<message-id>', 'Message ID')
+    .option('--read', 'Mark as read')
+    .option('--unread', 'Mark as unread')
     .action(async (
       messageId: string,
       opts: { read?: boolean; unread?: boolean },
@@ -216,23 +216,23 @@ export function registerInbox(program: Command) {
         readStateFromOptions(opts),
       );
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`邮件 ${messageId} 已标记为${res.is_read ? '已读' : '未读'}`);
+      success(`Message ${messageId} marked as ${res.is_read ? 'read' : 'unread'}`);
     });
 
   messages
     .command('reply')
-    .description('从原收件地址回复邮件（计入邮件用量）')
-    .argument('<message-id>', '要回复的邮件 ID')
-    .requiredOption('--idempotency-key <key>', '稳定的回复幂等键（8-200 位）')
-    .option('--text <text>', '纯文本回复正文')
-    .option('--text-file <path>', '从文件读取纯文本回复正文')
-    .option('--html <html>', 'HTML 回复正文')
-    .option('--html-file <path>', '从文件读取 HTML 回复正文')
-    .option('--to <email>', '覆盖回复对象')
-    .option('--subject <subject>', '覆盖自动生成的 Re: 主题')
-    .option('--from-name <name>', '发件人显示名')
-    .option('--attachment <path>', '添加本地附件（可重复；总计最多 10 个/6MB）', (v, p: string[]) => [...p, v], [] as string[])
-    .option('--inline <content-id=path>', '添加 HTML cid: 内嵌图片（可重复）', (v, p: string[]) => [...p, v], [] as string[])
+    .description('Reply from the original inbox address (counts toward email usage)')
+    .argument('<message-id>', 'ID of the message to reply to')
+    .requiredOption('--idempotency-key <key>', 'Stable idempotency key for the reply (8-200 characters)')
+    .option('--text <text>', 'Plain-text reply body')
+    .option('--text-file <path>', 'Read the plain-text reply body from a file')
+    .option('--html <html>', 'HTML reply body')
+    .option('--html-file <path>', 'Read the HTML reply body from a file')
+    .option('--to <email>', 'Override the reply recipient')
+    .option('--subject <subject>', 'Override the generated Re: subject')
+    .option('--from-name <name>', 'Sender display name')
+    .option('--attachment <path>', 'Attach a local file (repeatable; up to 10 files / 6MB total)', (v, p: string[]) => [...p, v], [] as string[])
+    .option('--inline <content-id=path>', 'Add an inline image referenced by HTML cid: (repeatable)', (v, p: string[]) => [...p, v], [] as string[])
     .action(async (
       messageId: string,
       opts: {
@@ -250,12 +250,12 @@ export function registerInbox(program: Command) {
       command: Command,
     ) => {
       if (!/^[A-Za-z0-9._:-]{8,200}$/.test(opts.idempotencyKey)) {
-        throw new Error('--idempotency-key 必须是 8-200 位字母、数字或 . _ : -');
+        throw new Error('--idempotency-key must be 8-200 letters, digits, or . _ : -');
       }
       const text = await readOptionalFile(opts.text, opts.textFile, '--text');
       const html = await readOptionalFile(opts.html, opts.htmlFile, '--html');
-      if (!text && !html) throw new Error('回复必须提供 --text/--text-file 或 --html/--html-file');
-      if (opts.inline?.length && !html) throw new Error('--inline 必须同时提供 HTML 正文');
+      if (!text && !html) throw new Error('A reply needs --text/--text-file or --html/--html-file');
+      if (opts.inline?.length && !html) throw new Error('--inline requires an HTML body');
       const attachments = await loadEmailAttachments(opts.attachment, opts.inline);
       const res = await (await clientFor(command)).replyToInboxMessage(messageId, {
         ...(text ? { text } : {}),
@@ -267,28 +267,28 @@ export function registerInbox(program: Command) {
       }, opts.idempotencyKey);
       if (getOutputFormat() === 'json') return printJSON(res);
       if (res.status === 'processing') {
-        info(`回复仍在处理中；request ID: ${res.request_id}`);
+        info(`Reply still processing; request ID: ${res.request_id}`);
         return;
       }
-      success(`回复已发送${res.to ? `给 ${res.to}` : ''}`);
+      success(`Reply sent${res.to ? ` to ${res.to}` : ''}`);
       if (res.request_id) info(`Request ID: ${res.request_id}`);
       if (res.thread_id) info(`Thread ID: ${res.thread_id}`);
     });
 
   messages
     .command('forward')
-    .description('从原收件地址把邮件转发给别人（计入邮件用量）；原附件默认一并转发')
-    .argument('<message-id>', '要转发的邮件 ID')
-    .requiredOption('--to <email>', '转发给谁')
-    .requiredOption('--idempotency-key <key>', '稳定的转发幂等键（8-200 位）')
-    .option('--text <text>', '纯文本备注（写在转发内容前面）')
-    .option('--text-file <path>', '从文件读取纯文本备注')
-    .option('--html <html>', 'HTML 备注')
-    .option('--html-file <path>', '从文件读取 HTML 备注')
-    .option('--subject <subject>', '覆盖自动生成的 Fwd: 主题')
-    .option('--from-name <name>', '发件人显示名')
-    .option('--no-attachments', '不转发原邮件附件')
-    .option('--attachment <path>', '额外添加本地附件（可重复；总计最多 10 个/6MB）', (v, p: string[]) => [...p, v], [] as string[])
+    .description('Forward a message from the original inbox address (counts toward email usage); original attachments are included by default')
+    .argument('<message-id>', 'ID of the message to forward')
+    .requiredOption('--to <email>', 'Forward to this address')
+    .requiredOption('--idempotency-key <key>', 'Stable idempotency key for the forward (8-200 characters)')
+    .option('--text <text>', 'Plain-text note (placed above the forwarded content)')
+    .option('--text-file <path>', 'Read the plain-text note from a file')
+    .option('--html <html>', 'HTML note')
+    .option('--html-file <path>', 'Read the HTML note from a file')
+    .option('--subject <subject>', 'Override the generated Fwd: subject')
+    .option('--from-name <name>', 'Sender display name')
+    .option('--no-attachments', 'Do not forward the original attachments')
+    .option('--attachment <path>', 'Attach an extra local file (repeatable; up to 10 files / 6MB total)', (v, p: string[]) => [...p, v], [] as string[])
     .action(async (
       messageId: string,
       opts: {
@@ -306,7 +306,7 @@ export function registerInbox(program: Command) {
       command: Command,
     ) => {
       if (!/^[A-Za-z0-9._:-]{8,200}$/.test(opts.idempotencyKey)) {
-        throw new Error('--idempotency-key 必须是 8-200 位字母、数字或 . _ : -');
+        throw new Error('--idempotency-key must be 8-200 letters, digits, or . _ : -');
       }
       const text = await readOptionalFile(opts.text, opts.textFile, '--text');
       const html = await readOptionalFile(opts.html, opts.htmlFile, '--html');
@@ -322,54 +322,54 @@ export function registerInbox(program: Command) {
       }, opts.idempotencyKey);
       if (getOutputFormat() === 'json') return printJSON(res);
       if (res.status === 'processing') {
-        info(`转发仍在处理中；request ID: ${res.request_id}`);
+        info(`Forward still processing; request ID: ${res.request_id}`);
         return;
       }
-      success(`已转发给 ${res.to ?? opts.to}`);
+      success(`Forwarded to ${res.to ?? opts.to}`);
       if (res.request_id) info(`Request ID: ${res.request_id}`);
       if (res.thread_id) info(`Thread ID: ${res.thread_id}`);
     });
 
   messages
     .command('delete')
-    .description('永久删除单封邮件及其存储的正文和附件')
-    .argument('<message-id>', '邮件 ID')
-    .requiredOption('--yes', '确认永久删除')
+    .description('Permanently delete one message with its stored body and attachments')
+    .argument('<message-id>', 'Message ID')
+    .requiredOption('--yes', 'Confirm permanent deletion')
     .action(async (messageId: string, _opts: { yes: boolean }, command: Command) => {
       const res = await (await clientFor(command)).deleteInboxMessage(messageId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`邮件 ${messageId} 已删除`);
+      success(`Message ${messageId} deleted`);
     });
 
-  const threads = inbox.command('threads').description('按会话查看收件箱');
+  const threads = inbox.command('threads').description('Browse the inbox by thread');
 
   addMailSearchOptions(threads
     .command('list', { isDefault: true })
-    .description('分页列出或搜索会话摘要（会话内任一邮件匹配即返回整条会话）；读取不会修改已读状态')
-    .option('--address-id <id>', '只查看指定收件地址')
-    .option('--limit <n>', '返回条数', parsePositiveInteger)
-    .option('--cursor <cursor>', '服务端返回的下一页游标')
-    .option('--folder <folder>', 'inbox / quarantine（默认 inbox）', parseInboxFolder)
-    .option('--sender-domain <domain>', '按发件人域名筛选（忽略大小写的整域名匹配，不含子域名；走索引）'), INBOX_SEARCH_LABELS)
+    .description('List or search thread summaries page by page (a thread matches if any of its messages does); reading does not change read state')
+    .option('--address-id <id>', 'Only show this inbox address')
+    .option('--limit <n>', 'Number of results', parsePositiveInteger)
+    .option('--cursor <cursor>', 'Next-page cursor returned by the server')
+    .option('--folder <folder>', 'inbox / quarantine (default inbox)', parseInboxFolder)
+    .option('--sender-domain <domain>', 'Filter by sender domain (case-insensitive exact domain match, subdomains excluded; indexed)'), INBOX_SEARCH_LABELS)
     .action(async (opts: InboxListOptions, command) => {
       const res = await (await clientFor(command)).listInboxThreads(opts);
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.threads.length) return info('暂无会话');
-      printTable(['时间', '未读', '邮件数', '主题', 'Thread ID'], res.threads.map((thread) => [
+      if (!res.threads.length) return info('No threads');
+      printTable(['Time', 'Unread', 'Messages', 'Subject', 'Thread ID'], res.threads.map((thread) => [
         formatTimestamp(thread.last_received_at),
         String(thread.unread_count),
         String(thread.message_count),
         truncate(thread.latest_message?.subject),
         thread.thread_id,
       ]));
-      if (res.cursor) info(`下一页 cursor: ${res.cursor}`);
+      if (res.cursor) info(`Next page cursor: ${res.cursor}`);
     });
 
   threads
     .command('show')
-    .description('查看会话内全部邮件；读取不会修改已读状态')
-    .argument('<thread-id>', '会话 ID')
-    .option('--folder <folder>', 'inbox / quarantine（默认 inbox）', parseInboxFolder)
+    .description('Show every message in a thread; reading does not change read state')
+    .argument('<thread-id>', 'Thread ID')
+    .option('--folder <folder>', 'inbox / quarantine (default inbox)', parseInboxFolder)
     .action(async (threadId: string, opts: { folder?: string }, command) => {
       const res = await (await clientFor(command)).getInboxThread(threadId, opts.folder);
       if (getOutputFormat() === 'json') return printJSON(res);
@@ -381,10 +381,10 @@ export function registerInbox(program: Command) {
 
   threads
     .command('read-state')
-    .description('显式设置会话内全部入站邮件的已读状态')
-    .argument('<thread-id>', '会话 ID')
-    .option('--read', '标记为已读')
-    .option('--unread', '标记为未读')
+    .description('Set the read state of every inbound message in a thread')
+    .argument('<thread-id>', 'Thread ID')
+    .option('--read', 'Mark as read')
+    .option('--unread', 'Mark as unread')
     .action(async (
       threadId: string,
       opts: { read?: boolean; unread?: boolean },
@@ -395,30 +395,30 @@ export function registerInbox(program: Command) {
         readStateFromOptions(opts),
       );
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`会话 ${threadId} 已标记为${res.is_read ? '已读' : '未读'}（更新 ${res.updated_count} 封）`);
+      success(`Thread ${threadId} marked as ${res.is_read ? 'read' : 'unread'} (${res.updated_count} messages updated)`);
     });
 
-  const replies = inbox.command('replies').description('查询幂等回复请求');
+  const replies = inbox.command('replies').description('Look up idempotent reply requests');
 
   replies
     .command('show')
-    .argument('<request-id>', '回复请求 ID')
+    .argument('<request-id>', 'Reply request ID')
     .action(async (requestId: string, _opts, command) => {
       const res = await (await clientFor(command)).getInboxReply(requestId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      info(`状态: ${res.request.status}`);
-      info(`回复邮件 ID: ${res.request.reply_email_id}`);
-      if (res.request.response_status != null) info(`响应状态: ${res.request.response_status}`);
+      info(`Status: ${res.request.status}`);
+      info(`Reply message ID: ${res.request.reply_email_id}`);
+      if (res.request.response_status != null) info(`Response status: ${res.request.response_status}`);
     });
 
-  const attachments = inbox.command('attachments').description('下载私有收件附件');
+  const attachments = inbox.command('attachments').description('Download private inbound attachments');
 
   attachments
     .command('download')
-    .argument('<message-id>', '邮件 ID')
-    .argument('<attachment-id>', '附件 ID')
-    .argument('[output]', '输出文件路径（默认使用原文件名）')
-    .option('--force', '覆盖已存在的输出文件')
+    .argument('<message-id>', 'Message ID')
+    .argument('<attachment-id>', 'Attachment ID')
+    .argument('[output]', 'Output file path (defaults to the original file name)')
+    .option('--force', 'Overwrite an existing output file')
     .action(async (
       messageId: string,
       attachmentId: string,
@@ -432,7 +432,7 @@ export function registerInbox(program: Command) {
         await fs.writeFile(target, result.bytes, { flag: opts.force ? 'w' : 'wx' });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-          throw new Error(`输出文件已存在：${target}（如需覆盖请加 --force）`);
+          throw new Error(`Output file already exists: ${target} (add --force to overwrite)`);
         }
         throw error;
       }
@@ -444,35 +444,35 @@ export function registerInbox(program: Command) {
           contentType: result.contentType,
         });
       }
-      success(`附件已保存到 ${target}`);
+      success(`Attachment saved to ${target}`);
     });
 
-  const webhook = inbox.command('webhook').description('配置签名收件 Webhook');
+  const webhook = inbox.command('webhook').description('Configure the signed inbound webhook');
 
   webhook
     .command('get', { isDefault: true })
     .alias('show')
-    .description('查看当前收件 Webhook 配置')
+    .description('Show the current inbound webhook configuration')
     .action(async (_opts, command) => {
       const res = await (await clientFor(command)).getInboxWebhook();
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.webhook) return info('尚未配置收件 Webhook');
+      if (!res.webhook) return info('No inbound webhook configured');
       info(`URL: ${res.webhook.url}`);
-      info(`状态: ${res.webhook.active ? 'active' : 'disabled'}`);
-      info(`正文格式: ${res.webhook.bodyFormat}`);
-      info(`去引用: ${res.webhook.stripQuotes ? '开启' : '关闭'}`);
-      info(`事件: ${res.webhook.events.join(', ')}`);
+      info(`Status: ${res.webhook.active ? 'active' : 'disabled'}`);
+      info(`Body format: ${res.webhook.bodyFormat}`);
+      info(`Strip quotes: ${res.webhook.stripQuotes ? 'on' : 'off'}`);
+      info(`Events: ${res.webhook.events.join(', ')}`);
     });
 
   webhook
     .command('set')
-    .description('创建或更新收件 Webhook')
-    .requiredOption('--url <url>', '公开 HTTPS 回调地址')
-    .option('--body-format <format>', '推送正文格式：text / markdown / html', parseInboxBodyFormat)
-    .option('--strip-quotes', '推送时去掉发件人客户端附带的引用历史')
-    .option('--no-strip-quotes', '推送时保留完整引用历史')
-    .option('--signing-secret <secret>', '自定义 32-256 字符签名密钥')
-    .option('--rotate-secret', '生成新的签名密钥')
+    .description('Create or update the inbound webhook')
+    .requiredOption('--url <url>', 'Public HTTPS callback URL')
+    .option('--body-format <format>', 'Pushed body format: text / markdown / html', parseInboxBodyFormat)
+    .option('--strip-quotes', 'Strip quoted reply history added by mail clients when pushing')
+    .option('--no-strip-quotes', 'Keep the full quoted history when pushing')
+    .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters)')
+    .option('--rotate-secret', 'Generate a new signing secret')
     .action(async (
       opts: {
         url: string;
@@ -491,11 +491,11 @@ export function registerInbox(program: Command) {
         ...(opts.rotateSecret ? { rotateSecret: true } : {}),
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`收件 Webhook 已配置: ${res.webhook.url}`);
-      info(`正文格式: ${res.webhook.bodyFormat}`);
-      info(`去引用: ${res.webhook.stripQuotes ? '开启' : '关闭'}`);
+      success(`Inbound webhook configured: ${res.webhook.url}`);
+      info(`Body format: ${res.webhook.bodyFormat}`);
+      info(`Strip quotes: ${res.webhook.stripQuotes ? 'on' : 'off'}`);
       if (res.signingSecret) {
-        warn('签名密钥只在本次返回，请立即保存：');
+        warn('The signing secret is shown only once. Save it now:');
         info(res.signingSecret);
       }
     });
@@ -503,42 +503,42 @@ export function registerInbox(program: Command) {
   webhook
     .command('delete')
     .alias('disable')
-    .description('停用收件 Webhook（保留配置与投递历史）')
+    .description('Disable the inbound webhook (keeps its configuration and delivery history)')
     .action(async (_opts, command) => {
       const res = await (await clientFor(command)).disableInboxWebhook();
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(res.disabled ? '收件 Webhook 已停用' : '没有可停用的收件 Webhook');
+      success(res.disabled ? 'Inbound webhook disabled' : 'No inbound webhook to disable');
     });
 
   const addressWebhook = webhook
     .command('address')
-    .description('配置单个收件地址的专属收件 Webhook（未配置的地址走全局 Webhook）');
+    .description('Configure a dedicated inbound webhook per inbox address (addresses without one use the global webhook)');
 
   addressWebhook
     .command('get')
-    .description('查看某个收件地址的专属 Webhook 配置')
-    .argument('<address-id>', '收件地址 ID（mailly inbox addresses list 查看）')
+    .description('Show the dedicated webhook for an inbox address')
+    .argument('<address-id>', 'Inbox address ID (see mailly inbox addresses list)')
     .action(async (addressId: string, _opts: unknown, command: Command) => {
       const res = await (await clientFor(command)).getInboxWebhookAddressSubscription(addressId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.subscription) return info('该地址未配置专属 Webhook，走全局 Webhook');
-      info(`地址: ${res.subscription.addressId}`);
+      if (!res.subscription) return info('This address has no dedicated webhook and uses the global webhook');
+      info(`Address: ${res.subscription.addressId}`);
       info(`URL: ${res.subscription.url}`);
-      info(`状态: ${res.subscription.active ? 'active' : 'disabled'}`);
-      info(`正文格式: ${res.subscription.bodyFormat}`);
-      info(`去引用: ${res.subscription.stripQuotes ? '开启' : '关闭'}`);
+      info(`Status: ${res.subscription.active ? 'active' : 'disabled'}`);
+      info(`Body format: ${res.subscription.bodyFormat}`);
+      info(`Strip quotes: ${res.subscription.stripQuotes ? 'on' : 'off'}`);
     });
 
   addressWebhook
     .command('set')
-    .description('为某个收件地址创建/更新专属 Webhook（此后该地址只推送到此 URL）')
-    .argument('<address-id>', '收件地址 ID（mailly inbox addresses list 查看）')
-    .requiredOption('--url <url>', '公开 HTTPS 回调地址')
-    .option('--body-format <format>', '推送正文格式：text / markdown / html', parseInboxBodyFormat)
-    .option('--strip-quotes', '推送时去掉发件人客户端附带的引用历史')
-    .option('--no-strip-quotes', '推送时保留完整引用历史')
-    .option('--signing-secret <secret>', '自定义 32-256 字符签名密钥')
-    .option('--rotate-secret', '生成新的签名密钥')
+    .description('Create or update the dedicated webhook for an inbox address (that address then pushes only to this URL)')
+    .argument('<address-id>', 'Inbox address ID (see mailly inbox addresses list)')
+    .requiredOption('--url <url>', 'Public HTTPS callback URL')
+    .option('--body-format <format>', 'Pushed body format: text / markdown / html', parseInboxBodyFormat)
+    .option('--strip-quotes', 'Strip quoted reply history added by mail clients when pushing')
+    .option('--no-strip-quotes', 'Keep the full quoted history when pushing')
+    .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters)')
+    .option('--rotate-secret', 'Generate a new signing secret')
     .action(async (
       addressId: string,
       opts: {
@@ -558,11 +558,11 @@ export function registerInbox(program: Command) {
         ...(opts.rotateSecret ? { rotateSecret: true } : {}),
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`地址 ${res.subscription.addressId} 的专属 Webhook 已配置: ${res.subscription.url}`);
-      info(`正文格式: ${res.subscription.bodyFormat}`);
-      info(`去引用: ${res.subscription.stripQuotes ? '开启' : '关闭'}`);
+      success(`Dedicated webhook for address ${res.subscription.addressId} configured: ${res.subscription.url}`);
+      info(`Body format: ${res.subscription.bodyFormat}`);
+      info(`Strip quotes: ${res.subscription.stripQuotes ? 'on' : 'off'}`);
       if (res.signingSecret) {
-        warn('签名密钥只在本次返回，请立即保存：');
+        warn('The signing secret is shown only once. Save it now:');
         info(res.signingSecret);
       }
     });
@@ -570,11 +570,11 @@ export function registerInbox(program: Command) {
   addressWebhook
     .command('delete')
     .alias('remove')
-    .description('删除某个收件地址的专属 Webhook，回落到全局 Webhook')
-    .argument('<address-id>', '收件地址 ID')
+    .description('Delete the dedicated webhook for an inbox address and fall back to the global webhook')
+    .argument('<address-id>', 'Inbox address ID')
     .action(async (addressId: string, _opts: unknown, command: Command) => {
       const res = await (await clientFor(command)).removeInboxWebhookAddressSubscription(addressId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(res.removed ? '该地址的专属 Webhook 已删除，回落到全局 Webhook' : '该地址没有专属 Webhook');
+      success(res.removed ? 'Dedicated webhook deleted; this address now uses the global webhook' : 'This address has no dedicated webhook');
     });
 }

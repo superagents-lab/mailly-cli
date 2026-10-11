@@ -12,30 +12,30 @@ async function clientFor(command: Command): Promise<MaillyClient> {
 }
 
 export function registerEvents(program: Command) {
-  const events = program.command('events').description('上报和查询 Workflow 事件');
+  const events = program.command('events').description('Ingest and query workflow events');
 
   events
     .command('track')
-    .requiredOption('--file <path>', '事件 JSON 文件；使用 - 从 stdin 读取')
+    .requiredOption('--file <path>', 'Event JSON file; use - to read from stdin')
     .action(async (opts, command) => {
       const res = await (await clientFor(command)).trackWorkflowEvent(await readJsonInput(opts.file) as any);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`事件 ${res.event.eventId} 已${res.duplicate ? '幂等接收' : '接收'}`);
-      info(`  触发 Workflow Run: ${res.triggeredRunIds?.length ?? 0}`);
-      info(`  退出 Workflow Run: ${res.exitedRunIds?.length ?? 0}`);
+      success(`Event ${res.event.eventId} ${res.duplicate ? 'already received (idempotent)' : 'received'}`);
+      info(`  Workflow runs triggered: ${res.triggeredRunIds?.length ?? 0}`);
+      info(`  Workflow runs exited: ${res.exitedRunIds?.length ?? 0}`);
     });
 
   events
     .command('batch')
-    .requiredOption('--file <path>', 'JSON 数组或 {"events": [...]} 文件；使用 - 从 stdin 读取')
+    .requiredOption('--file <path>', 'JSON array or {"events": [...]} file; use - to read from stdin')
     .action(async (opts, command) => {
       const input = await readJsonInput(opts.file) as any;
       const batch = Array.isArray(input) ? input : input?.events;
-      if (!Array.isArray(batch)) throw new Error('批量输入必须是 JSON 数组或 {"events": [...]}。');
+      if (!Array.isArray(batch)) throw new Error('Batch input must be a JSON array or {"events": [...]}.');
       const res = await (await clientFor(command)).trackWorkflowEvents(batch);
       if (getOutputFormat() === 'json') return printJSON(res);
       const succeeded = res.results?.filter((item: any) => item.success).length ?? 0;
-      success(`已接收 ${res.received} 个事件，成功 ${succeeded}，失败 ${res.received - succeeded}`);
+      success(`Received ${res.received} events: ${succeeded} succeeded, ${res.received - succeeded} failed`);
     });
 
   events
@@ -45,9 +45,9 @@ export function registerEvents(program: Command) {
       const res = await (await clientFor(command)).getWorkflowEvent(eventId);
       if (getOutputFormat() === 'json') return printJSON(res);
       info(`${res.event.eventName} (${res.event.eventId})`);
-      info(`  联系人: ${res.event.contact.externalContactId} <${res.event.contact.email}>`);
-      info(`  状态: ${res.event.processingStatus}`);
-      info(`  发生时间: ${res.event.occurredAt}`);
+      info(`  Contact: ${res.event.contact.externalContactId} <${res.event.contact.email}>`);
+      info(`  Status: ${res.event.processingStatus}`);
+      info(`  Occurred at: ${res.event.occurredAt}`);
       info(`  Workflow Run: ${res.runs?.length ?? 0}`);
     });
 
@@ -57,18 +57,18 @@ export function registerEvents(program: Command) {
     .action(async (eventId, _opts, command) => {
       const res = await (await clientFor(command)).replayWorkflowEvent(eventId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`失败事件 ${eventId} 已重放`);
+      success(`Failed event ${eventId} replayed`);
     });
 
   events
     .command('timeline')
     .argument('<external-contact-id>')
-    .option('--limit <n>', '返回条数', (value) => Number.parseInt(value, 10))
+    .option('--limit <n>', 'Number of results', (value) => Number.parseInt(value, 10))
     .action(async (externalContactId, opts, command) => {
       const res = await (await clientFor(command)).getWorkflowContactTimeline(externalContactId, opts.limit);
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.events?.length) return info('暂无事件');
-      printTable(['事件', 'Event ID', '状态', '发生时间', '触发', '退出'], res.events.map((event: any) => [
+      if (!res.events?.length) return info('No events');
+      printTable(['Event', 'Event ID', 'Status', 'Occurred at', 'Triggered', 'Exited'], res.events.map((event: any) => [
         event.eventName,
         event.eventId,
         event.processingStatus,

@@ -26,7 +26,7 @@ import { registerOutbox } from './commands/outbox.js';
 import { registerAgents } from './commands/agents.js';
 import { registerDrafts } from './commands/drafts.js';
 
-const VERSION = '0.2.1';
+const VERSION = '0.3.0';
 
 export function createProgram() {
   const program = new Command();
@@ -36,11 +36,11 @@ export function createProgram() {
 
   program
     .name('mailly')
-    .description('Mailly CLI — 发送邮件、验证码、管理域名和收件箱')
-    .version(VERSION, '-v, --version', '显示版本号')
-    .option('--api-key <key>', '使用指定的 API Key（覆盖配置文件和环境变量）')
-    .option('--base-url <url>', '使用指定的 API Base URL（默认 https://api.mailly.site）')
-    .option('--json', '以 JSON 格式输出（适合脚本和 Agent 调用）')
+    .description('Mailly CLI — send email and verification codes, manage domains and inboxes')
+    .version(VERSION, '-v, --version', 'Show the version number')
+    .option('--api-key <key>', 'Use this API key (overrides the config file and environment variable)')
+    .option('--base-url <url>', 'Use this API base URL (default https://api.mailly.site)')
+    .option('--json', 'Output JSON (for scripts and agents)')
     .hook('preAction', (thisCommand) => {
       const opts = thisCommand.opts() as { json?: boolean };
       if (opts.json) setOutputFormat('json');
@@ -92,13 +92,13 @@ export async function run(argv: string[]) {
     if (err && err.code && typeof err.code === 'string' && err.code.startsWith('commander.')) {
       const exitCode = typeof err.exitCode === 'number' ? err.exitCode : 1;
       if (exitCode === 0) return;
-      if (jsonRequested) return fail(err.message || '命令参数无效');
+      if (jsonRequested) return fail(err.message || 'Invalid command arguments');
       // Pretty mode has already received Commander's normal stderr output.
       process.exitCode = exitCode;
       return;
     }
     if (err instanceof ApiError) {
-      return fail(`API 错误 (${err.status}): ${err.message}`);
+      return fail(`API error (${err.status}): ${err.message}`);
     }
     return fail(err?.message || String(err));
   }

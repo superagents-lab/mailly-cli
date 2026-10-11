@@ -15,8 +15,8 @@ export interface MailSearchOptions {
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-// 只写日期时按本机时区的自然日：--since 取当天零点，--until 包含当天（取次日零点作为不含的上界）。
-// 带时间的 ISO 8601 按其自身时区；纯数字视为 Unix 秒。统一换算成 Unix 秒发给 API。
+// A bare date is a calendar day in the local time zone: --since starts at midnight, --until includes the whole day (next midnight is the exclusive bound).
+// ISO 8601 with a time uses its own zone; bare numbers are Unix seconds. Everything is sent to the API as Unix seconds.
 export function parseTimeOption(value: string, inclusiveDay: boolean): number {
   const trimmed = value.trim();
   const dateOnly = DATE_ONLY.exec(trimmed);
@@ -24,32 +24,32 @@ export function parseTimeOption(value: string, inclusiveDay: boolean): number {
     const [, year, month, day] = dateOnly.map(Number);
     const start = new Date(year, month - 1, day);
     if (start.getFullYear() !== year || start.getMonth() !== month - 1 || start.getDate() !== day) {
-      throw new Error(`无效日期：${value}`);
+      throw new Error(`Invalid date: ${value}`);
     }
     if (inclusiveDay) start.setDate(start.getDate() + 1);
     return Math.floor(start.getTime() / 1000);
   }
   if (/^\d+$/.test(trimmed)) return Number(trimmed);
   const millis = Date.parse(trimmed);
-  if (!Number.isFinite(millis)) throw new Error(`无法识别的时间：${value}（用 YYYY-MM-DD、ISO 8601 或 Unix 秒）`);
+  if (!Number.isFinite(millis)) throw new Error(`Unrecognized time: ${value} (use YYYY-MM-DD, ISO 8601, or Unix seconds)`);
   return Math.floor(millis / 1000);
 }
 
 function parseMatch(value: string): MailSearchMatch {
   if ((MAIL_SEARCH_MATCH_MODES as readonly string[]).includes(value)) return value as MailSearchMatch;
-  throw new Error(`--match 只能是 ${MAIL_SEARCH_MATCH_MODES.join(' / ')}`);
+  throw new Error(`--match must be one of ${MAIL_SEARCH_MATCH_MODES.join(' / ')}`);
 }
 
-// 收件箱与发件箱列表共用的搜索参数；与 API 同名，只检索元数据，不检索正文。
+// Search options shared by inbox and outbox lists; named like the API, they match metadata only, never the body.
 export function addMailSearchOptions(command: Command, labels: { sender: string; query: string; time: string }): Command {
   return command
-    .option('--recipient <email>', '按收件人搜索（匹配方式见 --match）')
+    .option('--recipient <email>', 'Search by recipient (see --match for matching)')
     .option('--sender <email>', labels.sender)
-    .option('--subject <text>', '按主题搜索（匹配方式见 --match）')
-    .option('--match <mode>', 'recipient/sender/subject 的匹配方式：exact（默认，忽略大小写的完整匹配）/ fuzzy（包含）', parseMatch)
+    .option('--subject <text>', 'Search by subject (see --match for matching)')
+    .option('--match <mode>', 'How recipient/sender/subject match: exact (default, case-insensitive full match) / fuzzy (contains)', parseMatch)
     .option('--query <text>', labels.query)
-    .option('--since <time>', `${labels.time}下界（含）：YYYY-MM-DD（本机时区当天零点）、ISO 8601 或 Unix 秒`, (value) => parseTimeOption(value, false))
-    .option('--until <time>', `${labels.time}上界：YYYY-MM-DD 包含当天；ISO 8601 / Unix 秒为不含的精确上界`, (value) => parseTimeOption(value, true));
+    .option('--since <time>', `${labels.time} lower bound (inclusive): YYYY-MM-DD (local midnight), ISO 8601, or Unix seconds`, (value) => parseTimeOption(value, false))
+    .option('--until <time>', `${labels.time} upper bound: YYYY-MM-DD includes that day; ISO 8601 / Unix seconds are an exact exclusive bound`, (value) => parseTimeOption(value, true));
 }
 
 export function mailSearchQuery(options: MailSearchOptions) {

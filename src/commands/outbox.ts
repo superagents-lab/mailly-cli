@@ -33,23 +33,23 @@ function sourceContext(message: any): string {
 }
 
 export function registerOutbox(program: Command) {
-  const outbox = program.command('outbox').description('查询每位收件人的已发邮件与投递状态');
+  const outbox = program.command('outbox').description('Query sent email and delivery status per recipient');
 
   addMailSearchOptions(outbox
     .command('list', { isDefault: true })
-    .description('列出或搜索已发邮件（每位收件人、每次尝试一条）')
-    .option('--source <kind>', '按来源过滤：api/web/campaign/workflow/template_test/inbox_reply')
-    .option('--status <status>', '按发送状态过滤')
-    .option('--delivery-status <status>', '按投递状态过滤')
-    .option('--campaign-key <key>', '按 Campaign key 过滤')
-    .option('--task-id <id>', '按批量任务 ID 过滤')
-    .option('--provider-message-id <id>', '按 Provider Message ID 过滤'), {
-    sender: '按发件人搜索（匹配方式见 --match）',
-    query: '跨收件人、发件人、主题和 Message ID 模糊搜索（不含正文）',
-    time: '发送时间',
+    .description('List or search sent email (one row per recipient per attempt)')
+    .option('--source <kind>', 'Filter by source: api/web/campaign/workflow/template_test/inbox_reply')
+    .option('--status <status>', 'Filter by send status')
+    .option('--delivery-status <status>', 'Filter by delivery status')
+    .option('--campaign-key <key>', 'Filter by campaign key')
+    .option('--task-id <id>', 'Filter by batch task ID')
+    .option('--provider-message-id <id>', 'Filter by provider message ID'), {
+    sender: 'Search by sender (see --match for matching)',
+    query: 'Fuzzy search across recipient, sender, subject, and message ID (not the body)',
+    time: 'Send time',
   })
-    .option('--limit <n>', '返回条数（默认 50，最大 200）', (value) => Number.parseInt(value, 10))
-    .option('--offset <n>', '分页偏移', (value) => Number.parseInt(value, 10))
+    .option('--limit <n>', 'Number of results (default 50, max 200)', (value) => Number.parseInt(value, 10))
+    .option('--offset <n>', 'Pagination offset', (value) => Number.parseInt(value, 10))
     .action(async (opts, command) => {
       const res = await (await clientFor(command)).listSentMessages({
         source: opts.source,
@@ -63,9 +63,9 @@ export function registerOutbox(program: Command) {
         offset: opts.offset,
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.messages?.length) return info('暂无已发邮件');
+      if (!res.messages?.length) return info('No sent email');
       printTable(
-        ['时间', '来源', '收件人', '主题', '状态', 'Message ID'],
+        ['Time', 'Source', 'Recipient', 'Subject', 'Status', 'Message ID'],
         res.messages.map((message: any) => [
           fmtTimestamp(message.createdAt),
           truncate(sourceContext(message), 28),
@@ -75,18 +75,18 @@ export function registerOutbox(program: Command) {
           truncate(message.id, 28),
         ]),
       );
-      info(c.dim(`显示 ${res.messages.length} / ${res.total} 封 (offset=${res.offset}, limit=${res.limit})`));
+      info(c.dim(`Showing ${res.messages.length} / ${res.total} (offset=${res.offset}, limit=${res.limit})`));
     });
 
   outbox
     .command('show')
-    .description('查看一封已发邮件及其投递上下文')
+    .description('Show one sent email and its delivery context')
     .argument('<message-id>', 'Mailly Message ID')
     .action(async (messageId, _opts, command) => {
       const res = await (await clientFor(command)).getSentMessage(messageId);
       if (getOutputFormat() === 'json') return printJSON(res);
       const message = res.message;
-      info(`${message.subject || '(无主题)'} (${message.id})`);
+      info(`${message.subject || '(no subject)'} (${message.id})`);
       info(`  From: ${message.from?.name ? `${message.from.name} <${message.from.email}>` : message.from?.email}`);
       info(`  To: ${message.recipient?.email}`);
       info(`  Source: ${sourceContext(message)}`);

@@ -1,7 +1,7 @@
 /**
- * 联系人同步的批量切分。服务端每个请求有条数上限，而且每条 upsert
- * 都要做几次 D1 往返，请求太大就会超时。CLI 负责把任意大小的输入切成安全的
- * 分片顺序提交，运营不用再自己拆文件。
+ * Chunking for contact sync. The server caps the number of items per request, and each upsert
+ * costs several D1 round trips, so oversized requests time out. The CLI splits input of any
+ * size into safe chunks and submits them in order, so operators never have to split files.
  */
 export const DEFAULT_CONTACT_CHUNK_SIZE = 100;
 export const MAX_CONTACT_CHUNK_SIZE = 500;
@@ -17,14 +17,14 @@ export function chunkItems<T>(items: T[], size: number): T[][] {
 export function resolveChunkSize(value: number | undefined): number {
   if (value == null) return DEFAULT_CONTACT_CHUNK_SIZE;
   if (!Number.isInteger(value) || value < 1 || value > MAX_CONTACT_CHUNK_SIZE) {
-    throw new Error(`--chunk-size 必须是 1-${MAX_CONTACT_CHUNK_SIZE} 之间的整数`);
+    throw new Error(`--chunk-size must be an integer between 1 and ${MAX_CONTACT_CHUNK_SIZE}`);
   }
   return value;
 }
 
 /**
- * 按 CSV 记录（而不是按行）切分：带引号的字段里可以有换行，直接 split('\n')
- * 会把一条记录劈成两半。
+ * Split by CSV record, not by line: quoted fields may contain newlines, and a plain split('\n')
+ * would cut a record in half.
  */
 export function splitCsvRecords(source: string): string[] {
   const records: string[] = [];
@@ -60,14 +60,14 @@ export function splitCsvRecords(source: string): string[] {
 
 export interface CsvChunk {
   csv: string;
-  /** 数据行数（不含表头）；用来把服务端返回的分片内行号还原成原文件行号。 */
+  /** Data row count (excluding the header); maps chunk-local row numbers from the server back to the original file. */
   rows: number;
 }
 
-/** 保留表头，把数据行按 size 切成多份可独立提交的 CSV。 */
+/** Keeps the header and splits data rows into CSV chunks of `size` that can be submitted independently. */
 export function chunkCsv(source: string, size: number): CsvChunk[] {
   const records = splitCsvRecords(source.replace(/^\uFEFF/, ''));
-  if (records.length === 0) throw new Error('CSV 内容为空');
+  if (records.length === 0) throw new Error('CSV content is empty');
   const [header, ...rows] = records;
   if (rows.length === 0) return [{ csv: `${header}\n`, rows: 0 }];
   return chunkItems(rows, size).map((chunk) => ({

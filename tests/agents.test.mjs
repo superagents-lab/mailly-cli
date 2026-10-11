@@ -101,7 +101,7 @@ test('list and show expose stored profiles; missing profile fails', async (t) =>
   }
   assert.deepEqual(JSON.parse((await run(['show', 'agent-1'])).stdout), { success: true, agent });
   await assert.rejects(run(['show', 'missing']), (error) => {
-    assert.match(JSON.parse(error.stdout).error, /不存在/);
+    assert.match(JSON.parse(error.stdout).error, /not found/);
     return true;
   });
   assert.ok(requests.every((req) => req.method === 'GET' && req.path === '/agents'));

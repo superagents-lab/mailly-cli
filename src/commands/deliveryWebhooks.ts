@@ -11,25 +11,25 @@ async function clientFor(command: Command): Promise<MaillyClient> {
 }
 
 export function registerDeliveryWebhooks(program: Command) {
-  const webhooks = program.command('webhooks').description('配置签名投递事件 Webhook');
+  const webhooks = program.command('webhooks').description('Configure the signed delivery-event webhook');
 
   webhooks
     .command('show', { isDefault: true })
     .action(async (_opts, command) => {
       const res = await (await clientFor(command)).getDeliveryWebhook();
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.webhook) return info('尚未配置投递事件 Webhook');
+      if (!res.webhook) return info('No delivery-event webhook configured');
       info(`URL: ${res.webhook.url}`);
-      info(`状态: ${res.webhook.active ? 'active' : 'disabled'}`);
-      info(`事件: ${res.webhook.events.join(', ')}`);
+      info(`Status: ${res.webhook.active ? 'active' : 'disabled'}`);
+      info(`Events: ${res.webhook.events.join(', ')}`);
     });
 
   webhooks
     .command('set')
-    .requiredOption('--url <url>', '公开 HTTPS 回调地址')
-    .option('--events <types>', '逗号分隔事件类型；默认订阅全部')
-    .option('--signing-secret <secret>', '自定义 32-256 字符签名密钥')
-    .option('--rotate-secret', '生成新的签名密钥')
+    .requiredOption('--url <url>', 'Public HTTPS callback URL')
+    .option('--events <types>', 'Comma-separated event types; subscribes to all by default')
+    .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters)')
+    .option('--rotate-secret', 'Generate a new signing secret')
     .action(async (opts, command) => {
       const res = await (await clientFor(command)).setDeliveryWebhook({
         url: opts.url,
@@ -38,9 +38,9 @@ export function registerDeliveryWebhooks(program: Command) {
         rotateSecret: opts.rotateSecret,
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`Webhook 已配置: ${res.webhook.url}`);
+      success(`Webhook configured: ${res.webhook.url}`);
       if (res.signingSecret) {
-        warn('签名密钥只在本次返回，请立即保存：');
+        warn('The signing secret is shown only once. Save it now:');
         info(res.signingSecret);
       }
     });
@@ -50,6 +50,6 @@ export function registerDeliveryWebhooks(program: Command) {
     .action(async (_opts, command) => {
       const res = await (await clientFor(command)).disableDeliveryWebhook();
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(res.disabled ? 'Webhook 已停用' : '没有可停用的 Webhook');
+      success(res.disabled ? 'Webhook disabled' : 'No webhook to disable');
     });
 }

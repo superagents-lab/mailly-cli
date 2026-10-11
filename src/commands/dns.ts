@@ -26,17 +26,17 @@ async function resolveTokenValue(tokenFlag?: string): Promise<string> {
     if (piped) return piped;
   }
   throw new Error(
-    '未提供 Token。请使用 --token <token>、设置 CLOUDFLARE_API_TOKEN 环境变量，或通过管道传入 ' +
-    '(例如 `mailly dns set-token < token.txt`)。',
+    'No token provided. Use --token <token>, set the CLOUDFLARE_API_TOKEN environment variable, or pipe it in ' +
+    '(for example `mailly dns set-token < token.txt`).',
   );
 }
 
 export function registerDns(program: Command) {
-  const dns = program.command('dns').description('DNS 服务商 Token 管理（支持 Cloudflare 一键配 DNS）');
+  const dns = program.command('dns').description('Manage DNS provider tokens (enables one-step Cloudflare DNS setup)');
 
   dns
     .command('status', { isDefault: true })
-    .description('查看已保存的 DNS 服务商 Token 状态')
+    .description('Show the status of the saved DNS provider token')
     .action(async (_opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -48,19 +48,19 @@ export function registerDns(program: Command) {
         return;
       }
       if (res.status.configured) {
-        success(`Cloudflare Token 已保存（提示后缀 ${c.cyan(res.status.tokenHint ?? '****')}），更新于 ${fmtUnix(res.status.updatedAt)}`);
-        info('  可在域名归属审核通过后运行 `mailly domains apply-dns <domain-id>` 一键写入 DNS 记录。');
+        success(`Cloudflare token saved (ends with ${c.cyan(res.status.tokenHint ?? '****')}), updated ${fmtUnix(res.status.updatedAt)}`);
+        info('  Once domain ownership is approved, run `mailly domains apply-dns <domain-id>` to write the DNS records in one step.');
       } else {
-        info('尚未保存 Cloudflare Token。');
-        info('  创建方法: Cloudflare Dashboard → My Profile → API Tokens → Create Token');
-        info('  权限: Zone → DNS → Edit（Zone Resources 限定需要的域名）；然后运行 `mailly dns set-token`。');
+        info('No Cloudflare token saved.');
+        info('  To create one: Cloudflare Dashboard → My Profile → API Tokens → Create Token');
+        info('  Permissions: Zone → DNS → Edit (limit Zone Resources to the domains you need), then run `mailly dns set-token`.');
       }
     });
 
   dns
     .command('set-token')
-    .description('校验并保存 Cloudflare API Token（也可从 CLOUDFLARE_API_TOKEN 环境变量读取）')
-    .option('--token <token>', 'Cloudflare API Token（建议改用环境变量或管道传入，避免留在 shell 历史里）')
+    .description('Verify and save a Cloudflare API token (can also be read from the CLOUDFLARE_API_TOKEN environment variable)')
+    .option('--token <token>', 'Cloudflare API token (prefer the environment variable or a pipe to keep it out of shell history)')
     .action(async (opts: { token?: string }, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const apiToken = await resolveTokenValue(opts.token);
@@ -72,15 +72,15 @@ export function registerDns(program: Command) {
         printJSON(res);
         return;
       }
-      if (!res.success) throw new Error(res.error || '保存失败');
-      success(res.message || 'Cloudflare Token 已保存');
-      info(`  提示后缀: ${c.cyan(res.status.tokenHint ?? '****')}`);
-      info('  下一步: 域名归属审核通过后运行 `mailly domains apply-dns <domain-id>`。');
+      if (!res.success) throw new Error(res.error || 'Save failed');
+      success(res.message || 'Cloudflare token saved');
+      info(`  Ends with: ${c.cyan(res.status.tokenHint ?? '****')}`);
+      info('  Next: once domain ownership is approved, run `mailly domains apply-dns <domain-id>`.');
     });
 
   dns
     .command('remove-token')
-    .description('删除已保存的 Cloudflare Token')
+    .description('Delete the saved Cloudflare token')
     .action(async (_opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -91,7 +91,7 @@ export function registerDns(program: Command) {
         printJSON(res);
         return;
       }
-      if (!res.success) throw new Error(res.error || '删除失败');
-      success(res.message || 'Cloudflare Token 已删除');
+      if (!res.success) throw new Error(res.error || 'Delete failed');
+      success(res.message || 'Cloudflare token deleted');
     });
 }

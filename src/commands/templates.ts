@@ -12,17 +12,17 @@ async function clientFor(command: Command): Promise<MaillyClient> {
 }
 
 export function registerTemplates(program: Command) {
-  const templates = program.command('templates').description('版本化邮件模板管理');
+  const templates = program.command('templates').description('Manage versioned email templates');
 
   templates
     .command('list', { isDefault: true })
-    .option('--limit <n>', '返回条数', (value) => Number.parseInt(value, 10))
-    .option('--offset <n>', '分页偏移', (value) => Number.parseInt(value, 10))
+    .option('--limit <n>', 'Number of results', (value) => Number.parseInt(value, 10))
+    .option('--offset <n>', 'Pagination offset', (value) => Number.parseInt(value, 10))
     .action(async (opts, command) => {
       const res = await (await clientFor(command)).listEmailTemplates(opts.limit, opts.offset);
       if (getOutputFormat() === 'json') return printJSON(res);
-      if (!res.templates?.length) return info('暂无邮件模板');
-      printTable(['Key', '名称', '状态', '默认语言', '类型', '更新时间'], res.templates.map((template: any) => [
+      if (!res.templates?.length) return info('No email templates');
+      printTable(['Key', 'Name', 'Status', 'Default locale', 'Type', 'Updated at'], res.templates.map((template: any) => [
         template.templateKey,
         template.name,
         template.status,
@@ -35,31 +35,31 @@ export function registerTemplates(program: Command) {
   templates
     .command('show')
     .argument('<template-key>')
-    .option('--version <n>', '查看指定已发布版本', (value) => Number.parseInt(value, 10))
+    .option('--version <n>', 'Show a specific published version', (value) => Number.parseInt(value, 10))
     .action(async (templateKey, opts, command) => {
       const res = await (await clientFor(command)).getEmailTemplate(templateKey);
       if (opts.version != null) {
         const version = res.versions?.find((item: any) => item.version === opts.version);
-        if (!version) throw new Error(`模板 ${templateKey} 不存在版本 ${opts.version}。`);
+        if (!version) throw new Error(`Template ${templateKey} has no version ${opts.version}.`);
         if (getOutputFormat() === 'json') return printJSON({ success: true, templateKey, version });
         info(`${templateKey}@${version.version}`);
-        info(`  发布时间: ${version.publishedAt}`);
-        info(`  默认语言: ${version.definition.defaultLocale}`);
-        info(`  类型: ${version.definition.emailType}`);
+        info(`  Published at: ${version.publishedAt}`);
+        info(`  Default locale: ${version.definition.defaultLocale}`);
+        info(`  Type: ${version.definition.emailType}`);
         return;
       }
       if (getOutputFormat() === 'json') return printJSON(res);
       info(`${res.template.name} (${res.template.templateKey})`);
-      info(`  状态: ${res.template.status}`);
-      info(`  已发布版本: ${res.versions?.length ?? 0}`);
-      info(`  当前版本: ${res.versions?.[0]?.version ?? '-'}`);
+      info(`  Status: ${res.template.status}`);
+      info(`  Published versions: ${res.versions?.length ?? 0}`);
+      info(`  Current version: ${res.versions?.[0]?.version ?? '-'}`);
     });
 
   templates
     .command('create')
-    .requiredOption('--key <template-key>', '稳定的 Template Key')
-    .requiredOption('--file <path>', '模板 definition JSON；使用 - 从 stdin 读取')
-    .option('--name <name>', '模板名称；默认使用 key')
+    .requiredOption('--key <template-key>', 'Stable template key')
+    .requiredOption('--file <path>', 'Template definition JSON; use - to read from stdin')
+    .option('--name <name>', 'Template name (defaults to the key)')
     .action(async (opts, command) => {
       const res = await (await clientFor(command)).createEmailTemplate({
         templateKey: opts.key,
@@ -67,21 +67,21 @@ export function registerTemplates(program: Command) {
         definition: await readJsonInput(opts.file),
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`模板 ${res.template.templateKey} 草稿已创建`);
+      success(`Template ${res.template.templateKey} draft created`);
     });
 
   templates
     .command('update')
     .argument('<template-key>')
-    .requiredOption('--file <path>', '模板 definition JSON；使用 - 从 stdin 读取')
-    .option('--name <name>', '同时修改名称')
+    .requiredOption('--file <path>', 'Template definition JSON; use - to read from stdin')
+    .option('--name <name>', 'Also rename')
     .action(async (templateKey, opts, command) => {
       const res = await (await clientFor(command)).updateEmailTemplateDraft(templateKey, {
         name: opts.name,
         definition: await readJsonInput(opts.file),
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`模板 ${templateKey} 草稿已更新`);
+      success(`Template ${templateKey} draft updated`);
     });
 
   templates
@@ -90,16 +90,16 @@ export function registerTemplates(program: Command) {
     .action(async (templateKey, _opts, command) => {
       const res = await (await clientFor(command)).publishEmailTemplate(templateKey);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`模板 ${templateKey}@${res.version.version} 已发布`);
+      success(`Template ${templateKey}@${res.version.version} published`);
     });
 
   templates
     .command('render')
     .argument('<template-key>')
-    .option('--version <n>', '渲染指定已发布版本', (value) => Number.parseInt(value, 10))
-    .option('--draft', '渲染当前草稿')
-    .option('--locale <locale>', '请求语言；按 exact -> language -> default 回退')
-    .option('--variables <path>', 'Variables JSON；使用 - 从 stdin 读取')
+    .option('--version <n>', 'Render a specific published version', (value) => Number.parseInt(value, 10))
+    .option('--draft', 'Render the current draft')
+    .option('--locale <locale>', 'Requested locale; falls back exact -> language -> default')
+    .option('--variables <path>', 'Variables JSON; use - to read from stdin')
     .action(async (templateKey, opts, command) => {
       const variables = opts.variables ? await readJsonInput(opts.variables) : {};
       const res = await (await clientFor(command)).renderEmailTemplate(templateKey, {
@@ -123,17 +123,17 @@ export function registerTemplates(program: Command) {
     .action(async (templateKey, _opts, command) => {
       const res = await (await clientFor(command)).archiveEmailTemplate(templateKey);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`模板 ${templateKey} 已归档`);
+      success(`Template ${templateKey} archived`);
     });
 
   templates
     .command('test-send')
     .argument('<template-key>')
-    .requiredOption('--to <email>', '内部测试收件邮箱')
-    .option('--version <n>', '测试指定已发布版本', (value) => Number.parseInt(value, 10))
-    .option('--draft', '测试当前草稿')
-    .option('--locale <locale>', '请求语言')
-    .option('--variables <path>', 'Variables JSON；使用 - 从 stdin 读取')
+    .requiredOption('--to <email>', 'Internal test recipient email')
+    .option('--version <n>', 'Test a specific published version', (value) => Number.parseInt(value, 10))
+    .option('--draft', 'Test the current draft')
+    .option('--locale <locale>', 'Requested locale')
+    .option('--variables <path>', 'Variables JSON; use - to read from stdin')
     .action(async (templateKey, opts, command) => {
       const variables = opts.variables ? await readJsonInput(opts.variables) : {};
       const res = await (await clientFor(command)).testSendEmailTemplate(templateKey, {
@@ -144,7 +144,7 @@ export function registerTemplates(program: Command) {
         variables,
       });
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(`模板 ${templateKey} 的测试邮件已提交给 ${opts.to}`);
+      success(`Test email for template ${templateKey} submitted to ${opts.to}`);
       if (res.provider_response?.taskId) info(`  Task ID: ${res.provider_response.taskId}`);
     });
 }

@@ -603,12 +603,12 @@ mailly inbox webhook address delete <address-id> --json
 
 | 错误 | 含义 | 建议处理 |
 |---|---|---|
-| `API 错误 (401)` | API Key 无效或被禁用 | 让用户重新 `mailly login` |
-| `API 错误 (402): Insufficient balance` | 积分不足 | 提示用户充值，**不要重试** |
-| `API 错误 (400): Invalid "to" field` | 收件人列表格式不对 | 检查每个收件人是否含 `@` |
-| `API 错误 (400): fromEmail is required` | 缺少发件人 | 用 `mailly domains list` 选一个 |
-| `API 错误 (502)` | 上游邮件服务异常 | 隔几秒后重试一次；仍然失败请用户稍后再试 |
-| `未找到 API Key` | 本地无凭据 | 让用户先 `mailly login` |
+| `API error (401)` | API Key 无效或被禁用 | 让用户重新 `mailly login` |
+| `API error (402): Insufficient balance` | 积分不足 | 提示用户充值，**不要重试** |
+| `API error (400): Invalid "to" field` | 收件人列表格式不对 | 检查每个收件人是否含 `@` |
+| `API error (400): fromEmail is required` | 缺少发件人 | 用 `mailly domains list` 选一个 |
+| `API error (502)` | 上游邮件服务异常 | 隔几秒后重试一次；仍然失败请用户稍后再试 |
+| `No API key found` | 本地无凭据 | 让用户先 `mailly login` |
 
 ## Agent 行为指南
 

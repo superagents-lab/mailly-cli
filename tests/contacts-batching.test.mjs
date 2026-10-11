@@ -12,8 +12,8 @@ test('chunkItems splits an oversized list into equal batches', () => {
 test('resolveChunkSize defaults and rejects unusable sizes', () => {
   assert.equal(resolveChunkSize(undefined), 100);
   assert.equal(resolveChunkSize(25), 25);
-  assert.throws(() => resolveChunkSize(0), /1-500/);
-  assert.throws(() => resolveChunkSize(501), /1-500/);
+  assert.throws(() => resolveChunkSize(0), /between 1 and 500/);
+  assert.throws(() => resolveChunkSize(501), /between 1 and 500/);
 });
 
 test('CSV records keep quoted newlines in one row', () => {
@@ -63,7 +63,7 @@ test('contacts batch splits a large file across requests and keeps global indice
         received: contacts.length,
         succeeded: contacts.length - 1,
         failed: 1,
-        // 每批都让最后一条失败，用来验证 index 被还原成全局位置
+        // Fail the last item of every batch to check that index maps back to the global position
         results: [{ index: contacts.length - 1, success: false, error: 'email is invalid.' }],
       },
     };

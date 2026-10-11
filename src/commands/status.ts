@@ -6,8 +6,8 @@ import { c, getOutputFormat, info, printJSON } from '../output.js';
 export function registerStatus(program: Command) {
   program
     .command('status')
-    .description('查询批量发送任务状态')
-    .argument('<taskId>', '批量任务 ID（来自 `mailly send` 的响应）')
+    .description('Show the status of a batch send task')
+    .argument('<taskId>', 'Batch task ID (from the `mailly send` response)')
     .action(async (taskId: string, _opts, command) => {
       const globalOpts = command.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -19,16 +19,16 @@ export function registerStatus(program: Command) {
         return;
       }
 
-      const status = res?.status ?? res?.task?.status ?? '未知';
+      const status = res?.status ?? res?.task?.status ?? 'unknown';
       const total = res?.totalEmails ?? res?.task?.totalEmails ?? '-';
       const processed = res?.processedEmails ?? res?.task?.processedEmails ?? '-';
       const succeeded = res?.successfulEmails ?? res?.task?.successfulEmails ?? '-';
       const failed = res?.failedEmails ?? res?.task?.failedEmails ?? '-';
       const skipped = res?.skippedEmails ?? res?.task?.skippedEmails ?? 0;
 
-      info(`任务 ${c.cyan(taskId)}`);
-      info(`  状态: ${c.bold(String(status))}`);
-      info(`  总数: ${total}    已处理: ${processed}`);
-      info(`  成功: ${c.green(String(succeeded))}    失败: ${c.red(String(failed))}    已抑制: ${skipped}`);
+      info(`Task ${c.cyan(taskId)}`);
+      info(`  Status: ${c.bold(String(status))}`);
+      info(`  Total: ${total}    Processed: ${processed}`);
+      info(`  Succeeded: ${c.green(String(succeeded))}    Failed: ${c.red(String(failed))}    Suppressed: ${skipped}`);
     });
 }

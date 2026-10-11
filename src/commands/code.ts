@@ -4,12 +4,12 @@ import { MaillyClient } from '../client.js';
 import { getOutputFormat, info, printJSON, success } from '../output.js';
 
 export function registerCode(program: Command) {
-  const code = program.command('code').description('验证码服务');
+  const code = program.command('code').description('Email verification codes');
 
   code
     .command('send')
-    .description('向指定邮箱发送 6 位验证码（5 分钟有效）')
-    .argument('<email>', '收件邮箱')
+    .description('Send a 6-digit verification code to an email address (valid for 5 minutes)')
+    .argument('<email>', 'Recipient email address')
     .action(async (email: string, _opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -20,15 +20,15 @@ export function registerCode(program: Command) {
         printJSON(res);
         return;
       }
-      success(res.message || `验证码已发送到 ${email}`);
-      info('验证码 5 分钟内有效，使用 `mailly code verify <email> <code>` 校验');
+      success(res.message || `Verification code sent to ${email}`);
+      info('The code is valid for 5 minutes. Check it with `mailly code verify <email> <code>`');
     });
 
   code
     .command('verify')
-    .description('校验邮箱验证码')
-    .argument('<email>', '收件邮箱')
-    .argument('<code>', '6 位验证码')
+    .description('Verify an email verification code')
+    .argument('<email>', 'Recipient email address')
+    .argument('<code>', '6-digit verification code')
     .action(async (email: string, codeStr: string, _opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -39,6 +39,6 @@ export function registerCode(program: Command) {
         printJSON(res);
         return;
       }
-      success(res.message || '验证成功');
+      success(res.message || 'Verified');
     });
 }

@@ -21,7 +21,7 @@ function truncate(s: string | null | undefined, max: number): string {
 export function registerLogs(program: Command) {
   const logs = program
     .command('logs')
-    .description('消费日志')
+    .description('Usage logs')
     .action(async (_opts, command) => {
       // default action: list latest logs
       await listLogs(command, {});
@@ -29,17 +29,17 @@ export function registerLogs(program: Command) {
 
   logs
     .command('list', { isDefault: true })
-    .description('列出最近的消费日志（按时间倒序）')
-    .option('--limit <n>', '返回条数（默认 50，最大 100）', (v) => parseInt(v, 10))
-    .option('--offset <n>', '分页偏移量（默认 0）', (v) => parseInt(v, 10))
+    .description('List recent usage logs (newest first)')
+    .option('--limit <n>', 'Number of results (default 50, max 100)', (v) => parseInt(v, 10))
+    .option('--offset <n>', 'Pagination offset (default 0)', (v) => parseInt(v, 10))
     .action(async (opts, command) => {
       await listLogs(command, opts);
     });
 
   logs
     .command('export')
-    .description('下载完整消费日志为 CSV 文件')
-    .argument('[output]', '输出文件路径（默认使用服务端返回的文件名）')
+    .description('Download the full usage log as a CSV file')
+    .argument('[output]', 'Output file path (defaults to the file name from the server)')
     .action(async (output: string | undefined, _opts, command) => {
       const globalOpts = command.parent!.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -53,7 +53,7 @@ export function registerLogs(program: Command) {
         printJSON({ success: true, path: target, bytes: Buffer.byteLength(csv, 'utf8') });
         return;
       }
-      success(`已保存日志到 ${target}`);
+      success(`Saved logs to ${target}`);
     });
 }
 
@@ -73,7 +73,7 @@ async function listLogs(
   }
 
   if (!res.logs.length) {
-    info('暂无消费记录');
+    info('No usage records');
     return;
   }
 
@@ -87,6 +87,6 @@ async function listLogs(
     truncate(l.subject, 32),
   ]);
 
-  printTable(['时间', '扣费', '模式', '收件数', '发件人', '收件人', '主题'], rows);
-  info(c.dim(`显示 ${res.logs.length} 条 (offset=${res.offset}, limit=${res.limit})`));
+  printTable(['Time', 'Charge', 'Mode', 'Recipients', 'From', 'To', 'Subject'], rows);
+  info(c.dim(`Showing ${res.logs.length} (offset=${res.offset}, limit=${res.limit})`));
 }

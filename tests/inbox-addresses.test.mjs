@@ -197,12 +197,12 @@ test('domains add explains the external DNS step before inbox address creation',
     'domains', 'add', 'pulseticker.app',
   ], { cwd: cliDirectory });
 
-  assert.match(result.stdout, /Cloudflare 或实际 DNS 服务商/);
-  assert.match(result.stdout, /MX.*smtp\.mailly\.site.*优先级 10/);
+  assert.match(result.stdout, /Cloudflare or your actual DNS provider/);
+  assert.match(result.stdout, /MX.*smtp\.mailly\.site.*priority 10/);
   assert.match(result.stdout, /mailly domains setup-outbound domain-pulse/);
   assert.match(result.stdout, /mailly domains verify-inbound domain-pulse/);
-  assert.match(result.stdout, /只收件不需要配置 SES/);
-  assert.match(result.stdout, /修改根域名 MX 会影响该域名的全部收件/);
+  assert.match(result.stdout, /Receiving only does not need SES/);
+  assert.match(result.stdout, /Changing the root domain MX affects all mail received on that domain/);
   assert.equal(result.stderr, '');
 });
 
@@ -665,7 +665,7 @@ test('inbox attachment download refuses to overwrite unless --force is explicit'
   }
   assert.ok(rejected);
   assert.equal(rejected.stderr, '');
-  assert.match(JSON.parse(rejected.stdout).error, /已存在/);
+  assert.match(JSON.parse(rejected.stdout).error, /already exists/);
   assert.deepEqual(await readFile(outputPath), Buffer.from('keep me'));
 
   const forced = await runCli(baseUrl, [

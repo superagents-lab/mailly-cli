@@ -143,7 +143,7 @@ export async function cliAuthInit(baseUrl: string, deviceToken: string): Promise
   });
   const data = (await res.json().catch(() => ({}))) as any;
   if (!res.ok || !data?.success) {
-    throw new ApiError(res.status, data?.error || `init 失败 (${res.status})`, data);
+    throw new ApiError(res.status, data?.error || `init failed (${res.status})`, data);
   }
   return {
     deviceToken: data.deviceToken,
@@ -168,7 +168,7 @@ export async function cliAuthPoll(baseUrl: string, deviceToken: string): Promise
   }
   const data = (await res.json().catch(() => ({}))) as any;
   if (!res.ok || !data?.success) {
-    throw new ApiError(res.status, data?.error || `poll 失败 (${res.status})`, data);
+    throw new ApiError(res.status, data?.error || `poll failed (${res.status})`, data);
   }
   return { status: 'approved', apiKey: data.apiKey, email: data.email };
 }
@@ -653,7 +653,7 @@ export class MaillyClient {
     const res = (await this.request<Response>('GET', path, { raw: true })) as Response;
     if (!res.ok) {
       const text = await res.text();
-      throw new ApiError(res.status, `下载 Campaign 收件人失败 (${res.status})`, text);
+      throw new ApiError(res.status, `Failed to download campaign recipients (${res.status})`, text);
     }
     const csv = await res.text();
     const disposition = res.headers.get('content-disposition') || '';
@@ -697,7 +697,7 @@ export class MaillyClient {
     const res = (await this.request<Response>('GET', '/logs/download', { raw: true })) as Response;
     if (!res.ok) {
       const text = await res.text();
-      throw new ApiError(res.status, `下载日志失败 (${res.status})`, text);
+      throw new ApiError(res.status, `Failed to download logs (${res.status})`, text);
     }
     const csv = await res.text();
     const disposition = res.headers.get('content-disposition') || '';
@@ -908,7 +908,7 @@ export class MaillyClient {
     const res = await this.request<Response>('GET', path, { raw: true });
     if (!res.ok) {
       const text = await res.text();
-      throw new ApiError(res.status, `下载收件附件失败 (${res.status})`, text);
+      throw new ApiError(res.status, `Failed to download attachment (${res.status})`, text);
     }
     const disposition = res.headers.get('content-disposition') || '';
     const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
@@ -1082,7 +1082,7 @@ export class MaillyClient {
     }>('POST', `/sender-domains/${encodeURIComponent(id)}/verify-outbound`);
   }
 
-  // --- DNS 服务商 Token（Cloudflare 一键配 DNS）---
+  // --- DNS provider token (one-step Cloudflare DNS setup) ---
 
   getCloudflareTokenStatus() {
     return this.request<{

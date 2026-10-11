@@ -6,7 +6,7 @@ import { c, getOutputFormat, info, printJSON } from '../output.js';
 export function registerBalance(program: Command) {
   program
     .command('balance')
-    .description('查询当前 API Key 的通用美元余额')
+    .description('Show the USD balance of the current API key')
     .action(async (_opts, command) => {
       const globalOpts = command.parent!.opts() as { apiKey?: string; baseUrl?: string };
       const auth = await resolveAuth({ apiKey: globalOpts.apiKey, baseUrl: globalOpts.baseUrl });
@@ -17,6 +17,6 @@ export function registerBalance(program: Command) {
         printJSON(res);
         return;
       }
-      info(`余额 (USD): ${c.green(String(res.balance))}`);
+      info(`Balance (USD): ${c.green(String(res.balance))}`);
     });
 }

@@ -28,18 +28,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function registerLogin(program: Command) {
   program
     .command('login')
-    .description('登录到 Mailly。默认通过浏览器授权（device-code flow）；也可直接粘贴 API Key。')
-    .argument('[api-key]', 'API Key（直接粘贴，跳过浏览器授权）')
-    .option('--base-url <url>', '设置 API Base URL（覆盖默认值）')
-    .option('--no-verify', '保存 API Key 时跳过余额校验（仅 api-key 模式有效）')
-    .option('--no-browser', '不自动打开浏览器，只打印授权 URL')
-    .option('--web-url <url>', '指定 Web 端 URL（默认根据 base-url 自动推断）')
-    .option('--resume <device-token>', '续办此前由 --json 发起的浏览器授权')
+    .description('Log in to Mailly. Authorizes in the browser by default (device-code flow); you can also paste an API key.')
+    .argument('[api-key]', 'API key (paste it to skip browser authorization)')
+    .option('--base-url <url>', 'Set the API base URL (overrides the default)')
+    .option('--no-verify', 'Skip the balance check when saving an API key (api-key mode only)')
+    .option('--no-browser', 'Do not open a browser; only print the authorization URL')
+    .option('--web-url <url>', 'Web app URL (inferred from base-url by default)')
+    .option('--resume <device-token>', 'Resume a browser authorization started earlier with --json')
     .action(async (apiKeyArg, opts: LoginOptions, command) => {
       const globalOpts = command.parent!.opts() as { apiKey?: string; baseUrl?: string };
-      // login 是「重新登录」语义，永远从生产 URL 起步，除非用户显式覆盖。
-      // 不读 ~/.mailly/config.json 里的 baseUrl —— 那是上次某次登录的残留，
-      // 用户可能正在切环境（例如本地测过之后回到生产）。
+      // login means "log in again", so it always starts from the production URL unless explicitly overridden.
+      // Do not read baseUrl from ~/.mailly/config.json: it is left over from a previous login,
+      // and the user may be switching environments (for example back to production after local testing).
       const baseUrl =
         opts.baseUrl ||
         globalOpts.baseUrl ||
@@ -47,7 +47,7 @@ export function registerLogin(program: Command) {
         DEFAULT_BASE_URL;
 
       const explicitApiKey = apiKeyArg || globalOpts.apiKey;
-      if (explicitApiKey && opts.resume) throw new Error('API Key 登录不能与 --resume 同时使用');
+      if (explicitApiKey && opts.resume) throw new Error('API key login cannot be combined with --resume');
       if (explicitApiKey) {
         await loginWithApiKey({
           apiKey: explicitApiKey,
@@ -58,17 +58,17 @@ export function registerLogin(program: Command) {
       }
 
       if (opts.resume) {
-        if (!/^[a-f0-9]{64}$/i.test(opts.resume)) throw new Error('--resume 必须是有效的 device token');
+        if (!/^[a-f0-9]{64}$/i.test(opts.resume)) throw new Error('--resume must be a valid device token');
         const result = await cliAuthPoll(baseUrl, opts.resume);
         if (result.status === 'pending') {
           if (getOutputFormat() === 'json') {
             printJSON({ success: true, status: 'pending', deviceToken: opts.resume });
           } else {
-            info('网页授权尚未完成，请完成后重试同一个 --resume 命令。');
+            info('Browser authorization is not complete yet. Finish it, then rerun the same --resume command.');
           }
           return;
         }
-        if (result.status === 'expired') throw new Error('授权请求已过期，请重新运行 mailly login');
+        if (result.status === 'expired') throw new Error('The authorization request expired. Run mailly login again');
         await finishDeviceLogin(result, baseUrl);
         return;
       }
@@ -91,13 +91,13 @@ export function registerLogin(program: Command) {
           baseUrl,
           expiresIn: init.expiresIn,
           interval: init.interval,
-          hint: '在浏览器中完成授权后，调用 mailly login --base-url <baseUrl> --resume <deviceToken> 完成登录',
+          hint: 'After authorizing in the browser, run mailly login --base-url <baseUrl> --resume <deviceToken> to finish logging in',
         });
         return;
       }
 
-      info(c.bold('一次性授权码已生成。'));
-      info(`请在浏览器中打开下方链接完成授权（${init.expiresIn} 秒内有效）：`);
+      info(c.bold('One-time authorization code created.'));
+      info(`Open the link below in your browser to authorize (valid for ${init.expiresIn} seconds):`);
       info('');
       info(`  ${c.cyan(authUrl)}`);
       info('');
@@ -107,12 +107,12 @@ export function registerLogin(program: Command) {
         opened = openBrowser(authUrl);
       }
       if (opened) {
-        info(c.dim('已尝试在系统默认浏览器中打开。'));
+        info(c.dim('Tried to open it in your default browser.'));
       } else if (opts.browser !== false) {
-        warn('未能自动打开浏览器，请手动复制上面的链接。');
+        warn('Could not open a browser. Copy the link above manually.');
       }
 
-      info(c.dim('等待网页授权…（按 Ctrl+C 取消）'));
+      info(c.dim('Waiting for browser authorization… (press Ctrl+C to cancel)'));
 
       const pollIntervalMs = Math.max(1, init.interval) * 1000;
       const deadline = Date.now() + init.expiresIn * 1000;
@@ -122,14 +122,14 @@ export function registerLogin(program: Command) {
         const result = await cliAuthPoll(baseUrl, deviceToken);
         if (result.status === 'pending') continue;
         if (result.status === 'expired') {
-          throw new Error('授权请求已过期，请重新运行 mailly login');
+          throw new Error('The authorization request expired. Run mailly login again');
         }
         // approved
         await finishDeviceLogin(result, baseUrl);
         return;
       }
 
-      throw new Error('授权请求已过期，请重新运行 mailly login');
+      throw new Error('The authorization request expired. Run mailly login again');
     });
 }
 
@@ -148,15 +148,15 @@ async function finishDeviceLogin(
     });
     return;
   }
-  success(`已登录为 ${c.cyan(result.email)}`);
-  info(`  API Key: ${c.cyan(maskKey(result.apiKey))}（已保存到 ${configPath()}）`);
+  success(`Logged in as ${c.cyan(result.email)}`);
+  info(`  API Key: ${c.cyan(maskKey(result.apiKey))} (saved to ${configPath()})`);
   info(`  Base URL: ${c.cyan(baseUrl)}`);
   try {
     const client = new MaillyClient({ apiKey: result.apiKey, baseUrl, source: 'flag' });
     const bal = await client.balance();
-    info(`  当前余额 (USD): ${c.green(String(bal.balance))}`);
+    info(`  Balance (USD): ${c.green(String(bal.balance))}`);
   } catch {
-    // 登录成功不应因余额查询失败而回滚。
+    // A failed balance lookup must not roll back a successful login.
   }
 }
 
@@ -172,8 +172,8 @@ async function loginWithApiKey(opts: { apiKey: string; baseUrl: string; verify: 
       const res = await client.balance();
       balance = res.balance;
     } catch (err: any) {
-      warn(`API Key 校验失败：${err.message}`);
-      throw new Error('API Key 无效或网络异常。如需跳过校验请加 --no-verify。');
+      warn(`API key check failed: ${err.message}`);
+      throw new Error('The API key is invalid or the network failed. Add --no-verify to skip the check.');
     }
   }
 
@@ -188,8 +188,8 @@ async function loginWithApiKey(opts: { apiKey: string; baseUrl: string; verify: 
     });
     return;
   }
-  success(`已保存 API Key 到 ${configPath()}`);
+  success(`Saved API key to ${configPath()}`);
   info(`  API Key: ${c.cyan(maskKey(opts.apiKey))}`);
   info(`  Base URL: ${c.cyan(opts.baseUrl)}`);
-  if (balance != null) info(`  当前余额 (USD): ${c.green(String(balance))}`);
+  if (balance != null) info(`  Balance (USD): ${c.green(String(balance))}`);
 }
