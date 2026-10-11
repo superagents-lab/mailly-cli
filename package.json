@@ -1,0 +1,52 @@
+{
+  "name": "mailly-cli",
+  "version": "0.2.0",
+  "description": "Command-line interface for Mailly: inboxes, sending, templates, workflows, and agent drafts from your terminal",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "mailly": "./bin/mailly.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "node bin/mailly.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
+  },
+  "keywords": [
+    "mailly",
+    "email",
+    "cli",
+    "inbox",
+    "ai-agent",
+    "claude-code-skill",
+    "smtp",
+    "transactional-email"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superagents-lab/mailly-cli.git"
+  },
+  "homepage": "https://mailly.site",
+  "bugs": {
+    "url": "https://github.com/superagents-lab/mailly-cli/issues"
+  }
+}

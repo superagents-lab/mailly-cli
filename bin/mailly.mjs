@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+import('../dist/index.js').then(({ run }) => run(process.argv)).catch((err) => {
+  console.error(err?.stack || err?.message || err);
+  process.exit(1);
+});
