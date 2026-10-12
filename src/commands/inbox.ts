@@ -2,7 +2,15 @@ import { promises as fs } from 'node:fs';
 import { basename, resolve as resolvePath } from 'node:path';
 import type { Command } from 'commander';
 import { resolveAuth } from '../config.js';
-import { MaillyClient, type InboxBodyFormat, type InboxListOptions, type InboxMessage } from '../client.js';
+import {
+  MaillyClient,
+  type InboxBodyFormat,
+  type InboxListOptions,
+  type InboxMessage,
+  type InboxWebhookConfig,
+  type InboxWebhookEndpoint,
+  type InboxWebhookTestResult,
+} from '../client.js';
 import { addMailSearchOptions } from '../search.js';
 import { getOutputFormat, info, printJSON, printTable, success, warn } from '../output.js';
 import { loadEmailAttachments } from '../attachments.js';
@@ -70,6 +78,45 @@ function readStateFromOptions(opts: { read?: boolean; unread?: boolean }): boole
     throw new Error('Specify exactly one of --read or --unread');
   }
   return Boolean(opts.read);
+}
+
+function activeFromOptions(opts: { enable?: boolean; disable?: boolean }): boolean | undefined {
+  if (opts.enable && opts.disable) throw new Error('Use either --enable or --disable, not both');
+  if (opts.enable) return true;
+  if (opts.disable) return false;
+  return undefined;
+}
+
+function printLastTest(config: Pick<InboxWebhookConfig, 'lastTest'>) {
+  const last = config.lastTest;
+  if (!last) return info('Last test: never');
+  const detail = last.ok ? `HTTP ${last.responseStatus}` : (last.error ?? `HTTP ${last.responseStatus}`);
+  info(`Last test: ${last.ok ? 'passed' : 'failed'} (${detail}) at ${last.at}`);
+}
+
+function printEndpoint(endpoint: InboxWebhookEndpoint) {
+  info(`ID: ${endpoint.id}`);
+  info(`Address: ${endpoint.address ?? endpoint.addressId}`);
+  info(`URL: ${endpoint.url}`);
+  info(`Status: ${endpoint.active ? 'active' : 'disabled'}`);
+  info(`Body format: ${endpoint.bodyFormat}`);
+  info(`Strip quotes: ${endpoint.stripQuotes ? 'on' : 'off'}`);
+  printLastTest(endpoint);
+}
+
+function printSigningSecret(secret: string | undefined) {
+  if (!secret) return;
+  warn('The signing secret is shown only once. Save it now:');
+  info(secret);
+}
+
+/** A failed test still returns HTTP 200 from Mailly; exit non-zero so scripts can tell. */
+function reportTestResult(test: InboxWebhookTestResult, url: string) {
+  if (!test.ok) process.exitCode = 1;
+  if (getOutputFormat() === 'json') return;
+  if (test.ok) success(`Test event delivered to ${url} (HTTP ${test.responseStatus}, ${test.durationMs} ms)`);
+  else warn(`Test event failed for ${url}: ${test.error ?? `HTTP ${test.responseStatus}`} (${test.durationMs} ms)`);
+  info(`Event ID: ${test.eventId}`);
 }
 
 async function clientFor(command: Command): Promise<MaillyClient> {
@@ -462,6 +509,7 @@ export function registerInbox(program: Command) {
       info(`Body format: ${res.webhook.bodyFormat}`);
       info(`Strip quotes: ${res.webhook.stripQuotes ? 'on' : 'off'}`);
       info(`Events: ${res.webhook.events.join(', ')}`);
+      printLastTest(res.webhook);
     });
 
   webhook
@@ -510,13 +558,164 @@ export function registerInbox(program: Command) {
       success(res.disabled ? 'Inbound webhook disabled' : 'No inbound webhook to disable');
     });
 
+  webhook
+    .command('test')
+    .description('Send a signed webhook.test event to the default inbound webhook now (exits 1 if the endpoint does not return 2xx)')
+    .action(async (_opts, command) => {
+      const res = await (await clientFor(command)).testInboxWebhook();
+      if (getOutputFormat() === 'json') printJSON(res);
+      reportTestResult(res.test, 'the default webhook');
+    });
+
+  const endpoints = webhook
+    .command('endpoints')
+    .alias('endpoint')
+    .description('Manage per-address webhook endpoints (up to 10 per address; each active endpoint gets its own delivery)');
+
+  endpoints
+    .command('list', { isDefault: true })
+    .alias('ls')
+    .description('List per-address webhook endpoints')
+    .option('--address-id <id>', 'Only endpoints of this inbox address')
+    .action(async (opts: { addressId?: string }, command: Command) => {
+      const res = await (await clientFor(command)).listInboxWebhookEndpoints(opts.addressId);
+      if (getOutputFormat() === 'json') return printJSON(res);
+      if (!res.endpoints.length) {
+        return info(opts.addressId
+          ? 'This address has no endpoints and uses the default webhook'
+          : 'No per-address webhook endpoints; all addresses use the default webhook');
+      }
+      printTable(
+        ['ID', 'Address', 'URL', 'Status', 'Format', 'Last test'],
+        res.endpoints.map((endpoint) => [
+          endpoint.id,
+          endpoint.address ?? endpoint.addressId,
+          truncate(endpoint.url, 56),
+          endpoint.active ? 'active' : 'disabled',
+          endpoint.bodyFormat,
+          endpoint.lastTest ? `${endpoint.lastTest.ok ? 'passed' : 'failed'} ${endpoint.lastTest.at}` : '-',
+        ]),
+      );
+    });
+
+  endpoints
+    .command('get')
+    .alias('show')
+    .description('Show a webhook endpoint')
+    .argument('<endpoint-id>', 'Endpoint ID (whk_...)')
+    .action(async (endpointId: string, _opts: unknown, command: Command) => {
+      const res = await (await clientFor(command)).getInboxWebhookEndpoint(endpointId);
+      if (getOutputFormat() === 'json') return printJSON(res);
+      printEndpoint(res.endpoint);
+    });
+
+  endpoints
+    .command('add')
+    .alias('create')
+    .description('Add a webhook endpoint to an inbox address (while it has an active endpoint, that address no longer uses the default webhook)')
+    .requiredOption('--address-id <id>', 'Inbox address ID (see mailly inbox addresses list)')
+    .requiredOption('--url <url>', 'Public HTTPS callback URL, unique per address')
+    .option('--body-format <format>', 'Pushed body format: text / markdown / html (default text)', parseInboxBodyFormat)
+    .option('--strip-quotes', 'Strip quoted reply history added by mail clients when pushing')
+    .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters); generated when omitted')
+    .option('--disable', 'Create the endpoint disabled')
+    .action(async (
+      opts: {
+        addressId: string;
+        url: string;
+        bodyFormat?: InboxBodyFormat;
+        stripQuotes?: boolean;
+        signingSecret?: string;
+        disable?: boolean;
+      },
+      command: Command,
+    ) => {
+      const res = await (await clientFor(command)).createInboxWebhookEndpoint({
+        addressId: opts.addressId,
+        url: opts.url.trim(),
+        ...(opts.bodyFormat ? { bodyFormat: opts.bodyFormat } : {}),
+        ...(opts.stripQuotes ? { stripQuotes: true } : {}),
+        ...(opts.signingSecret ? { signingSecret: opts.signingSecret } : {}),
+        ...(opts.disable ? { active: false } : {}),
+      });
+      if (getOutputFormat() === 'json') return printJSON(res);
+      success(`Webhook endpoint ${res.endpoint.id} added for ${res.endpoint.address ?? res.endpoint.addressId}`);
+      printEndpoint(res.endpoint);
+      printSigningSecret(res.signingSecret);
+      info(`Verify it with: mailly inbox webhook endpoints test ${res.endpoint.id}`);
+    });
+
+  endpoints
+    .command('update')
+    .alias('set')
+    .description('Update a webhook endpoint; omitted options keep their current values')
+    .argument('<endpoint-id>', 'Endpoint ID (whk_...)')
+    .option('--url <url>', 'Public HTTPS callback URL, unique per address')
+    .option('--body-format <format>', 'Pushed body format: text / markdown / html', parseInboxBodyFormat)
+    .option('--strip-quotes', 'Strip quoted reply history added by mail clients when pushing')
+    .option('--no-strip-quotes', 'Keep the full quoted history when pushing')
+    .option('--enable', 'Enable the endpoint')
+    .option('--disable', 'Disable the endpoint (the address falls back to the default webhook when none is active)')
+    .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters)')
+    .option('--rotate-secret', 'Generate a new signing secret')
+    .action(async (
+      endpointId: string,
+      opts: {
+        url?: string;
+        bodyFormat?: InboxBodyFormat;
+        stripQuotes?: boolean;
+        enable?: boolean;
+        disable?: boolean;
+        signingSecret?: string;
+        rotateSecret?: boolean;
+      },
+      command: Command,
+    ) => {
+      const active = activeFromOptions(opts);
+      const input = {
+        ...(opts.url ? { url: opts.url.trim() } : {}),
+        ...(opts.bodyFormat ? { bodyFormat: opts.bodyFormat } : {}),
+        ...(typeof opts.stripQuotes === 'boolean' ? { stripQuotes: opts.stripQuotes } : {}),
+        ...(typeof active === 'boolean' ? { active } : {}),
+        ...(opts.signingSecret ? { signingSecret: opts.signingSecret } : {}),
+        ...(opts.rotateSecret ? { rotateSecret: true } : {}),
+      };
+      if (!Object.keys(input).length) throw new Error('Nothing to update; pass at least one option');
+      const res = await (await clientFor(command)).updateInboxWebhookEndpoint(endpointId, input);
+      if (getOutputFormat() === 'json') return printJSON(res);
+      success(`Webhook endpoint ${res.endpoint.id} updated`);
+      printEndpoint(res.endpoint);
+      printSigningSecret(res.signingSecret);
+    });
+
+  endpoints
+    .command('delete')
+    .alias('remove')
+    .description('Delete a webhook endpoint (already queued deliveries still finish)')
+    .argument('<endpoint-id>', 'Endpoint ID (whk_...)')
+    .action(async (endpointId: string, _opts: unknown, command: Command) => {
+      const res = await (await clientFor(command)).deleteInboxWebhookEndpoint(endpointId);
+      if (getOutputFormat() === 'json') return printJSON(res);
+      success(`Webhook endpoint ${endpointId} deleted`);
+    });
+
+  endpoints
+    .command('test')
+    .description('Send a signed webhook.test event to an endpoint now, even if disabled (exits 1 if it does not return 2xx)')
+    .argument('<endpoint-id>', 'Endpoint ID (whk_...)')
+    .action(async (endpointId: string, _opts: unknown, command: Command) => {
+      const res = await (await clientFor(command)).testInboxWebhookEndpoint(endpointId);
+      if (getOutputFormat() === 'json') printJSON(res);
+      reportTestResult(res.test, res.endpoint.url);
+    });
+
   const addressWebhook = webhook
     .command('address')
-    .description('Configure a dedicated inbound webhook per inbox address (addresses without one use the global webhook)');
+    .description('Single-endpoint shortcut for an inbox address; acts on its oldest endpoint (use "endpoints" to manage several)');
 
   addressWebhook
     .command('get')
-    .description('Show the dedicated webhook for an inbox address')
+    .description('Show the oldest webhook endpoint of an inbox address')
     .argument('<address-id>', 'Inbox address ID (see mailly inbox addresses list)')
     .action(async (addressId: string, _opts: unknown, command: Command) => {
       const res = await (await clientFor(command)).getInboxWebhookAddressSubscription(addressId);
@@ -527,11 +726,14 @@ export function registerInbox(program: Command) {
       info(`Status: ${res.subscription.active ? 'active' : 'disabled'}`);
       info(`Body format: ${res.subscription.bodyFormat}`);
       info(`Strip quotes: ${res.subscription.stripQuotes ? 'on' : 'off'}`);
+      if ((res.subscription.endpointCount ?? 1) > 1) {
+        info(`This address has ${res.subscription.endpointCount} endpoints; see mailly inbox webhook endpoints list --address-id ${addressId}`);
+      }
     });
 
   addressWebhook
     .command('set')
-    .description('Create or update the dedicated webhook for an inbox address (that address then pushes only to this URL)')
+    .description('Create the first webhook endpoint of an inbox address, or update its oldest one')
     .argument('<address-id>', 'Inbox address ID (see mailly inbox addresses list)')
     .requiredOption('--url <url>', 'Public HTTPS callback URL')
     .option('--body-format <format>', 'Pushed body format: text / markdown / html', parseInboxBodyFormat)
@@ -570,11 +772,13 @@ export function registerInbox(program: Command) {
   addressWebhook
     .command('delete')
     .alias('remove')
-    .description('Delete the dedicated webhook for an inbox address and fall back to the global webhook')
+    .description('Delete the oldest webhook endpoint of an inbox address')
     .argument('<address-id>', 'Inbox address ID')
     .action(async (addressId: string, _opts: unknown, command: Command) => {
       const res = await (await clientFor(command)).removeInboxWebhookAddressSubscription(addressId);
       if (getOutputFormat() === 'json') return printJSON(res);
-      success(res.removed ? 'Dedicated webhook deleted; this address now uses the global webhook' : 'This address has no dedicated webhook');
+      success(res.removed
+        ? 'Oldest webhook endpoint deleted; with no active endpoint left, the address uses the default webhook'
+        : 'This address has no dedicated webhook');
     });
 }

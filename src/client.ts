@@ -33,8 +33,40 @@ export interface InboxWebhookConfig {
   stripQuotes: boolean;
   events: string[];
   signingSecretConfigured?: boolean;
+  lastTest?: InboxWebhookLastTest | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface InboxWebhookLastTest {
+  at: string;
+  ok: boolean;
+  responseStatus: number | null;
+  error: string | null;
+}
+
+export interface InboxWebhookEndpoint extends InboxWebhookConfig {
+  id: string;
+  addressId: string;
+  address: string | null;
+}
+
+export interface InboxWebhookTestResult {
+  ok: boolean;
+  eventId: string;
+  responseStatus: number | null;
+  error: string | null;
+  durationMs: number;
+  testedAt: string;
+}
+
+export interface InboxWebhookEndpointInput {
+  url?: string;
+  active?: boolean;
+  bodyFormat?: InboxBodyFormat;
+  stripQuotes?: boolean;
+  signingSecret?: string;
+  rotateSecret?: boolean;
 }
 
 export interface InboxMessageContent {
@@ -962,10 +994,59 @@ export class MaillyClient {
     return this.request<{ success: boolean; disabled: boolean }>('DELETE', '/inbox/webhook');
   }
 
+  testInboxWebhook() {
+    return this.request<{ success: boolean; test: InboxWebhookTestResult }>('POST', '/inbox/webhook/test');
+  }
+
+  listInboxWebhookEndpoints(addressId?: string) {
+    return this.request<{ success: boolean; endpoints: InboxWebhookEndpoint[] }>(
+      'GET',
+      '/inbox/webhook/endpoints',
+      { query: { address_id: addressId } },
+    );
+  }
+
+  getInboxWebhookEndpoint(endpointId: string) {
+    return this.request<{ success: boolean; endpoint: InboxWebhookEndpoint }>(
+      'GET',
+      `/inbox/webhook/endpoints/${encodeURIComponent(endpointId)}`,
+    );
+  }
+
+  createInboxWebhookEndpoint(input: InboxWebhookEndpointInput & { addressId: string; url: string }) {
+    return this.request<{ success: boolean; endpoint: InboxWebhookEndpoint; signingSecret?: string }>(
+      'POST',
+      '/inbox/webhook/endpoints',
+      { body: input },
+    );
+  }
+
+  updateInboxWebhookEndpoint(endpointId: string, input: InboxWebhookEndpointInput) {
+    return this.request<{ success: boolean; endpoint: InboxWebhookEndpoint; signingSecret?: string }>(
+      'PATCH',
+      `/inbox/webhook/endpoints/${encodeURIComponent(endpointId)}`,
+      { body: input },
+    );
+  }
+
+  deleteInboxWebhookEndpoint(endpointId: string) {
+    return this.request<{ success: boolean; removed: boolean }>(
+      'DELETE',
+      `/inbox/webhook/endpoints/${encodeURIComponent(endpointId)}`,
+    );
+  }
+
+  testInboxWebhookEndpoint(endpointId: string) {
+    return this.request<{ success: boolean; test: InboxWebhookTestResult; endpoint: InboxWebhookEndpoint }>(
+      'POST',
+      `/inbox/webhook/endpoints/${encodeURIComponent(endpointId)}/test`,
+    );
+  }
+
   getInboxWebhookAddressSubscription(addressId: string) {
     return this.request<{
       success: boolean;
-      subscription: InboxWebhookConfig & { addressId: string } | null;
+      subscription: InboxWebhookConfig & { addressId: string; endpointCount?: number } | null;
     }>('GET', `/inbox/webhook/addresses/${encodeURIComponent(addressId)}`);
   }
 

@@ -445,6 +445,129 @@ test('inbox webhook address delete removes the per-address subscription', async 
   assert.equal(result.stderr, '');
 });
 
+const sampleEndpoint = {
+  id: 'whk_000000000000000000000001',
+  addressId: 'address-1',
+  address: 'tickets@inbox.example.com',
+  url: 'https://hooks.example.com/a',
+  active: true,
+  bodyFormat: 'markdown',
+  stripQuotes: true,
+  events: ['email.received'],
+  signingSecretConfigured: true,
+  lastTest: null,
+  createdAt: '2026-10-12T00:00:00.000Z',
+  updatedAt: '2026-10-12T00:00:00.000Z',
+};
+
+function collectJson(request) {
+  return new Promise((resolve) => {
+    let raw = '';
+    request.on('data', (chunk) => { raw += chunk; });
+    request.on('end', () => resolve(raw ? JSON.parse(raw) : undefined));
+  });
+}
+
+test('inbox webhook endpoints list, add, update, and delete call the endpoint API', async (t) => {
+  const requests = [];
+  const baseUrl = await startMockServer(t, async (request, response) => {
+    requests.push([request.method, request.url, await collectJson(request)]);
+    response.writeHead(request.method === 'POST' ? 201 : 200, { 'Content-Type': 'application/json' });
+    if (request.method === 'GET') return response.end(JSON.stringify({ success: true, endpoints: [sampleEndpoint] }));
+    if (request.method === 'DELETE') return response.end(JSON.stringify({ success: true, removed: true }));
+    response.end(JSON.stringify({ success: true, endpoint: sampleEndpoint, signingSecret: 'whsec_once' }));
+  });
+
+  const listed = await runCli(baseUrl, ['inbox', 'webhook', 'endpoints', 'list', '--address-id', 'address-1', '--json']);
+  assert.equal(JSON.parse(listed.stdout).endpoints[0].id, sampleEndpoint.id);
+  await runCli(baseUrl, [
+    'inbox', 'webhook', 'endpoints', 'add',
+    '--address-id', 'address-1',
+    '--url', ' https://hooks.example.com/b ',
+    '--body-format', 'markdown',
+    '--strip-quotes',
+    '--json',
+  ]);
+  await runCli(baseUrl, [
+    'inbox', 'webhook', 'endpoints', 'update', sampleEndpoint.id,
+    '--no-strip-quotes', '--disable', '--rotate-secret', '--json',
+  ]);
+  await runCli(baseUrl, ['inbox', 'webhook', 'endpoints', 'delete', sampleEndpoint.id, '--json']);
+
+  assert.deepEqual(requests, [
+    ['GET', '/inbox/webhook/endpoints?address_id=address-1', undefined],
+    ['POST', '/inbox/webhook/endpoints', {
+      addressId: 'address-1',
+      url: 'https://hooks.example.com/b',
+      bodyFormat: 'markdown',
+      stripQuotes: true,
+    }],
+    ['PATCH', `/inbox/webhook/endpoints/${sampleEndpoint.id}`, { stripQuotes: false, active: false, rotateSecret: true }],
+    ['DELETE', `/inbox/webhook/endpoints/${sampleEndpoint.id}`, undefined],
+  ]);
+});
+
+test('inbox webhook endpoints update rejects an empty update and conflicting state flags', async (t) => {
+  let called = false;
+  const baseUrl = await startMockServer(t, (_request, response) => {
+    called = true;
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end('{}');
+  });
+
+  await assert.rejects(runCli(baseUrl, ['inbox', 'webhook', 'endpoints', 'update', sampleEndpoint.id]), /Nothing to update/);
+  await assert.rejects(
+    runCli(baseUrl, ['inbox', 'webhook', 'endpoints', 'update', sampleEndpoint.id, '--enable', '--disable']),
+    /either --enable or --disable/,
+  );
+  assert.equal(called, false);
+});
+
+test('inbox webhook endpoints test reports success and exits non-zero on a failed delivery', async (t) => {
+  let ok = true;
+  const baseUrl = await startMockServer(t, (request, response) => {
+    assert.equal(request.method, 'POST');
+    assert.equal(request.url, `/inbox/webhook/endpoints/${sampleEndpoint.id}/test`);
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({
+      success: true,
+      test: {
+        ok,
+        eventId: 'evt_test',
+        responseStatus: ok ? 204 : 500,
+        error: ok ? null : 'HTTP 500',
+        durationMs: 42,
+        testedAt: '2026-10-12T00:00:00.000Z',
+      },
+      endpoint: sampleEndpoint,
+    }));
+  });
+
+  const passed = await runCli(baseUrl, ['inbox', 'webhook', 'endpoints', 'test', sampleEndpoint.id]);
+  assert.match(passed.stdout, /Test event delivered to https:\/\/hooks\.example\.com\/a \(HTTP 204, 42 ms\)/);
+
+  ok = false;
+  const failed = await runCli(baseUrl, ['inbox', 'webhook', 'endpoints', 'test', sampleEndpoint.id, '--json'])
+    .then(() => assert.fail('expected a non-zero exit'), (error) => error);
+  assert.equal(failed.code, 1);
+  assert.equal(JSON.parse(failed.stdout).test.ok, false);
+});
+
+test('inbox webhook test sends a test event to the default webhook', async (t) => {
+  const baseUrl = await startMockServer(t, (request, response) => {
+    assert.equal(request.method, 'POST');
+    assert.equal(request.url, '/inbox/webhook/test');
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({
+      success: true,
+      test: { ok: true, eventId: 'evt_test', responseStatus: 200, error: null, durationMs: 10, testedAt: '2026-10-12T00:00:00.000Z' },
+    }));
+  });
+
+  const result = await runCli(baseUrl, ['inbox', 'webhook', 'test', '--json']);
+  assert.equal(JSON.parse(result.stdout).test.eventId, 'evt_test');
+});
+
 test('inbox addresses list uses the authenticated CLI client', async (t) => {
   const responseBody = {
     success: true,

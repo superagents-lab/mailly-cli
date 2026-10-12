@@ -570,16 +570,24 @@ mailly inbox webhook set \
   --json
 mailly inbox webhook get --json
 mailly inbox webhook delete --json
+mailly inbox webhook test --json
 
-# 单个收件地址的专属 Webhook；未配置时回落到全局 Webhook
-mailly inbox webhook address get <address-id> --json
-mailly inbox webhook address set <address-id> \
+# 收件地址的专属端点：每个地址最多 10 个，每个启用的端点各自签名投递、各自重试
+mailly inbox webhook endpoints list --address-id <address-id> --json
+mailly inbox webhook endpoints add \
+  --address-id <address-id> \
   --url https://example.com/webhooks/address-specific \
   --body-format markdown --strip-quotes --json
-mailly inbox webhook address delete <address-id> --json
+mailly inbox webhook endpoints get <endpoint-id> --json
+mailly inbox webhook endpoints update <endpoint-id> --disable --json
+mailly inbox webhook endpoints test <endpoint-id> --json
+mailly inbox webhook endpoints delete <endpoint-id> --json
 ```
 
-`--domain` 必须已经通过归属和 MX 验证；`--prefix` 可省略并由服务端随机生成。Webhook `set` 省略 `--body-format` 或去引用选项时保留现有值；用 `--no-strip-quotes` 可显式关闭。签名密钥只在首次配置或 `--rotate-secret` 时返回一次，立即保存且不要写入仓库或日志。
+`--domain` 必须已经通过归属和 MX 验证；`--prefix` 可省略并由服务端随机生成。Webhook `set` / `endpoints update` 省略 `--body-format` 或去引用选项时保留现有值；用 `--no-strip-quotes` 可显式关闭。签名密钥只在首次配置（`set` / `endpoints add`）或 `--rotate-secret` 时返回一次，立即保存且不要写入仓库或日志。
+
+- **默认 Webhook 与专属端点**：地址只要有一个启用的专属端点，它的来信就只推给它自己的端点（全部启用端点各收一份），不再推默认 Webhook；没有启用端点时回落到默认 Webhook。同一地址下 URL 不能重复。旧的 `mailly inbox webhook address get|set|delete <address-id>` 仍可用，但只作用于该地址最早创建的端点；需要多个端点时用 `endpoints`。
+- **测试**：`webhook test` / `endpoints test` 会立即向该 URL POST 一条签名的 `webhook.test` 事件（请求头 `Mailly-Event-Type: webhook.test`，body 带 `test: true`，结构与该端点格式的 `email.received` 相同，但示例邮件不入库，`content_url` 取不到），返回 `test.ok`、`responseStatus`、`error`、`durationMs`，并记到 `lastTest`；不入队也不重试，停用的端点也能测。端点未返回 2xx 时 CLI 退出码为 1。同一端点 5 秒内只能测一次（429）。测试会真实打到用户的接收端，接收端若未按 `Mailly-Event-Type` 或 `test` 过滤可能把它当成真实来信处理——只在用户要求验证时执行，不要例行调用。
 
 - **搜索**：`threads list` 与 `messages list` 支持 `--recipient`（`to_address`；入站邮件是你的收件地址，`direction: "outbound"` 的回复/转发是对方地址）、`--sender`（模糊时也匹配显示名）、`--sender-domain`（整域名精确匹配，不含子域名，走索引；按某家公司或服务商查信时优先用它，而不是 `--sender <域名片段> --match fuzzy`）、`--subject` 和 `--query`，可与 `--since` / `--until`（收件时间）、`--address-id` / `--folder` / `--cursor` 组合，所有条件同时生效。时间写 `YYYY-MM-DD` 时按本机时区的自然日，`--until` 包含当天；用户说“上周”“9 月”等相对或含糊的时间时，先换算成具体日期再查，并在回答里写明实际查询的日期范围。ISO 8601 带时区或 Unix 秒时 `--until` 是不含的精确上界。会话列表只要会话内有一封邮件同时满足全部条件就返回整条会话，`message_count` / `unread_count` / `latest_message` 仍是整条会话的值。正文暂不可搜索；按内容找邮件时先按元数据缩小范围，再用 `messages content` 读取。
 - **会话（Thread）**：收到的邮件按 `In-Reply-To` / `References` 自动归入会话；通过 `mailly inbox messages reply` 发出的回复也会以 `direction: "outbound"` 出现在同一会话里。

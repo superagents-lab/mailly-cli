@@ -210,7 +210,18 @@ mailly inbox webhook set --url <https-url> [--body-format text|markdown|html] \
                          [--strip-quotes|--no-strip-quotes] \
                          [--signing-secret <secret>|--rotate-secret]
 mailly inbox webhook delete
-mailly inbox webhook address get <address-id>
+mailly inbox webhook test
+mailly inbox webhook endpoints list [--address-id <address-id>]
+mailly inbox webhook endpoints get <endpoint-id>
+mailly inbox webhook endpoints add --address-id <address-id> --url <https-url> \
+  [--body-format text|markdown|html] [--strip-quotes] \
+  [--signing-secret <secret>] [--disable]
+mailly inbox webhook endpoints update <endpoint-id> [--url <https-url>] \
+  [--body-format text|markdown|html] [--strip-quotes|--no-strip-quotes] \
+  [--enable|--disable] [--signing-secret <secret>|--rotate-secret]
+mailly inbox webhook endpoints test <endpoint-id>
+mailly inbox webhook endpoints delete <endpoint-id>
+mailly inbox webhook address get <address-id>     # 旧接口：只作用于该地址最早的端点
 mailly inbox webhook address set <address-id> --url <https-url> \
   [--body-format text|markdown|html] [--strip-quotes|--no-strip-quotes] \
   [--signing-secret <secret>|--rotate-secret]
@@ -323,19 +334,24 @@ mailly inbox webhook set \
   --json
 mailly inbox webhook get --json
 mailly inbox webhook delete --json
+mailly inbox webhook test --json
 ```
 
 `set` 省略 `--body-format` 或去引用选项时会保留现有值；用 `--no-strip-quotes` 可显式关闭。签名密钥只在首次配置或 `--rotate-secret` 时返回一次，应立即保存。`delete` 只停用配置并保留投递历史。
 
-也可为单个收件地址配置独立 Webhook：
+也可为单个收件地址配置专属端点，每个地址最多 10 个。地址有启用的专属端点时，来信会推给它的每个启用端点（各自签名、各自重试），不再推默认 Webhook；没有启用端点时回落到默认 Webhook：
 
 ```bash
-mailly inbox webhook address set <address-id> \
+mailly inbox webhook endpoints add --address-id <address-id> \
   --url https://example.com/webhooks/address-specific \
   --body-format markdown --strip-quotes --json
-mailly inbox webhook address get <address-id> --json
-mailly inbox webhook address delete <address-id> --json
+mailly inbox webhook endpoints list --address-id <address-id> --json
+mailly inbox webhook endpoints update <endpoint-id> --disable --json
+mailly inbox webhook endpoints test <endpoint-id> --json
+mailly inbox webhook endpoints delete <endpoint-id> --json
 ```
+
+`webhook test` 和 `endpoints test` 会立即发送一条签名的 `webhook.test` 事件（请求头 `Mailly-Event-Type: webhook.test`，body 带 `test: true`），返回接收端的 HTTP 状态和耗时并记录为 `lastTest`；不入队、不重试，停用的端点也能测。接收端未返回 2xx 时命令退出码为 1；同一端点 5 秒内只能测一次。旧的 `webhook address get|set|delete <address-id>` 仍可用，但只操作该地址最早创建的端点。
 
 永久删除需要显式确认：`messages delete <id> --yes` 删除单封邮件；`addresses delete <id> --yes` 会级联删除该地址的全部邮件、正文和附件。
 

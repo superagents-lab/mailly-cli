@@ -1,11 +1,11 @@
 {
   "name": "mailly-cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Command-line interface for Mailly: inboxes, sending, templates, workflows, and agent drafts from your terminal",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "mailly": "./bin/mailly.mjs"
+    "mailly": "bin/mailly.mjs"
   },
   "files": [
     "bin",
