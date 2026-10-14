@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 // Domain setup needs DNS changes outside Mailly; the skill must walk agents through them.
-const maillySkillSource = await readFile(new URL('../skills/mailly/SKILL.md', import.meta.url), 'utf8');
+const maillySkillSource = await readFile(new URL('../skills/mailly/reference/commands.md', import.meta.url), 'utf8');
 
 test("Mailly skill requires CLI agents to explain the external DNS step", () => {
   assert.match(maillySkillSource, /CLI 不会代用户修改 DNS/)
@@ -23,4 +23,3 @@ test("Mailly skill documents the Cloudflare one-click DNS flow without dropping 
   // 手动路径必须保留，供未保存 Token 或其他 DNS 服务商的用户使用。
   assert.match(maillySkillSource, /未保存 Cloudflare Token 或 DNS 在其他服务商时，CLI 不会代用户修改 DNS/)
 })
-
