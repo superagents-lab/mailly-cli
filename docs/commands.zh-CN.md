@@ -140,6 +140,7 @@ mailly workflows publish <key> [--in-flight-policy continue]
 mailly workflows pause|resume|archive <key>
 mailly workflows runs <key> [--status <status>]
 mailly workflows run <key> <run-id>
+mailly workflows cancel <key> <run-id> --reason <text>
 
 mailly templates list
 mailly templates create --key <key> --name <name> --file template.json
@@ -540,6 +541,8 @@ mailly events timeline user_123 --json
 mailly workflows runs trial-onboarding --json
 mailly workflows run trial-onboarding <run-id> --json
 ```
+
+需要停掉某一条在途 Run（`queued`/`running`/`waiting`）时，用 `mailly workflows cancel <key> <run-id> --reason <text>`。Run 会变成 `terminated`，`exit_reason` 为 `cancelled`，不再执行后续 delay、条件或发送；已经发出的邮件不会撤回，同一 Workflow 的其他 Run 不受影响。对已结束的 Run 重复取消不会改动任何记录。取消原因和时间记录在 `mailly workflows run <key> <run-id>` 的日志里。
 
 Variables mapping 支持 `contact`、`trigger_event`、`latest_event`（必须指定 `event`）和 `workflow_config`。Contact 的 `locale` 会按 exact → language → Template default 回退。`--file -` 可从 stdin 读取 JSON。重复上报相同 `event_id` 和相同不可变内容会返回成功且不会重复触发；同 ID 但内容不同会返回 `409`。
 

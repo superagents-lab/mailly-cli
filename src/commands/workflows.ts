@@ -142,5 +142,31 @@ export function registerWorkflows(program: Command) {
           send.statusReason ?? '-',
         ]));
       }
+      if (res.logs?.length) {
+        info('');
+        printTable(['Time', 'Step', 'Action', 'Outcome', 'Reason'], res.logs.map((log: any) => [
+          log.createdAt,
+          log.stepIndex == null ? '-' : String(log.stepIndex),
+          log.action,
+          log.outcome,
+          log.details?.reason ?? '-',
+        ]));
+      }
+    });
+
+  workflows
+    .command('cancel')
+    .description('Cancel one queued, running or waiting run; emails already sent are not recalled')
+    .argument('<workflow-key>')
+    .argument('<run-id>')
+    .requiredOption('--reason <text>', 'Why the run is cancelled, kept in the run log')
+    .action(async (workflowKey, runId, opts, command) => {
+      const res = await (await clientFor(command)).cancelWorkflowRun(workflowKey, runId, { reason: opts.reason });
+      if (getOutputFormat() === 'json') return printJSON(res);
+      if (res.cancelled) success(`Run ${runId} cancelled`);
+      else info(`Run ${runId} had already ended; nothing changed`);
+      info(`  Status: ${res.run.status}`);
+      if (res.run.exitReason) info(`  Exit reason: ${res.run.exitReason}`);
+      if (res.platformFailures?.length) info(`  Platform operation failures: ${res.platformFailures.length}`);
     });
 }

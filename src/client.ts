@@ -649,6 +649,14 @@ export class MaillyClient {
     );
   }
 
+  cancelWorkflowRun(workflowKey: string, runId: string, input: { reason: string }) {
+    return this.request<any>(
+      'POST',
+      `/workflows/${encodeURIComponent(workflowKey)}/runs/${encodeURIComponent(runId)}/cancel`,
+      { body: input },
+    );
+  }
+
   campaignAction(campaignKey: string, action: 'pause' | 'resume' | 'cancel' | 'complete') {
     return this.request<any>('POST', `/campaigns/${encodeURIComponent(campaignKey)}/${action}`);
   }
