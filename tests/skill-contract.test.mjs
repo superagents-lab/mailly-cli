@@ -64,7 +64,7 @@ test('Mailly entry bootstraps through public HTTP without CLI or MCP prerequisit
   assert.match(skill, /no authentication/);
   assert.match(skill, /JSON `\{"name":"chosen-name"\}`/);
   assert.match(skill, /Ask the human.*name if unknown/);
-  assert.match(skill, /trimmed and lowercased.*1–64.*a-z0-9\._-.*start and end alphanumeric.*reserved system names/);
+  assert.match(skill, /trimmed and lowercased.*3–64.*a-z0-9\._-.*start and end alphanumeric.*reserved system or official names/);
   assert.match(skill, /`address` \(string `chosen-name@mailly\.site`\)/);
   assert.match(skill, /30 minutes against existing inboxes and pending reservations/);
   assert.match(skill, /HTTP 409 `code=name_taken`: ask for another name; no blind or mass retries/);

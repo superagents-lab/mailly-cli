@@ -546,7 +546,7 @@ mailly inbox webhook endpoints test <endpoint-id> --json
 mailly inbox webhook endpoints delete <endpoint-id> --json
 ```
 
-`--domain` 必须已经通过归属和 MX 验证；`--prefix` 可省略并由服务端随机生成。Webhook `set` / `endpoints update` 省略 `--body-format` 或去引用选项时保留现有值；用 `--no-strip-quotes` 可显式关闭。签名密钥只在首次配置（`set` / `endpoints add`）或 `--rotate-secret` 时返回一次，立即保存且不要写入仓库或日志。
+`--domain` 必须已经通过归属和 MX 验证；`--prefix` 可省略并由服务端随机生成。平台域名 `mailly.site` 上的前缀至少 3 个字符，且不能用 `admin`、`support`、`info`、`sys` 等系统和官方用途名称（忽略 `._-` 比对）；自有域名不受这两条限制。Webhook `set` / `endpoints update` 省略 `--body-format` 或去引用选项时保留现有值；用 `--no-strip-quotes` 可显式关闭。签名密钥只在首次配置（`set` / `endpoints add`）或 `--rotate-secret` 时返回一次，立即保存且不要写入仓库或日志。
 
 - **默认 Webhook 与专属端点**：地址只要有一个启用的专属端点，它的来信就只推给它自己的端点（全部启用端点各收一份），不再推默认 Webhook；没有启用端点时回落到默认 Webhook。同一地址下 URL 不能重复。旧的 `mailly inbox webhook address get|set|delete <address-id>` 仍可用，但只作用于该地址最早创建的端点；需要多个端点时用 `endpoints`。
 - **测试**：`webhook test` / `endpoints test` 会立即向该 URL POST 一条签名的 `webhook.test` 事件（请求头 `Mailly-Event-Type: webhook.test`，body 带 `test: true`，结构与该端点格式的 `email.received` 相同，但示例邮件不入库，`content_url` 取不到），返回 `test.ok`、`responseStatus`、`error`、`durationMs`，并记到 `lastTest`；不入队也不重试，停用的端点也能测。端点未返回 2xx 时 CLI 退出码为 1。同一端点 5 秒内只能测一次（429）。测试会真实打到用户的接收端，接收端若未按 `Mailly-Event-Type` 或 `test` 过滤可能把它当成真实来信处理——只在用户要求验证时执行，不要例行调用。
