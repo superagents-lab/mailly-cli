@@ -24,6 +24,31 @@ export interface AgentProfile {
   skills_json?: string;
 }
 
+export interface AgentRunFilters {
+  agent_id?: string;
+  thread_id?: string;
+  email_id?: string;
+  status?: string;
+  approval_status?: string;
+  limit?: number;
+}
+
+export interface AgentRun {
+  id: string;
+  agent_id: string;
+  agent_name?: string;
+  inbound_email_id: string;
+  thread_id?: string;
+  status: string;
+  approval_status: string | null;
+  summary: string | null;
+  draft_text: string | null;
+  subject?: string | null;
+  from_address?: string | null;
+  error?: string | null;
+  created_at: number;
+}
+
 export type InboxBodyFormat = 'text' | 'markdown' | 'html';
 
 export interface InboxWebhookConfig {
@@ -780,6 +805,22 @@ export class MaillyClient {
 
   updateAgent(id: string, input: AgentInput) {
     return this.request<{ success: boolean }>('PATCH', `/agents/${encodeURIComponent(id)}`, { body: input });
+  }
+
+  listAgentRuns(filters: AgentRunFilters = {}) {
+    return this.request<{ success: boolean; runs: AgentRun[] }>('GET', '/agents/runs', { query: { ...filters } });
+  }
+
+  getAgentRun(id: string) {
+    return this.request<{ success: boolean; run: AgentRun }>('GET', `/agents/runs/${encodeURIComponent(id)}`);
+  }
+
+  approveAgentRun(id: string, text: string) {
+    return this.request<any>('POST', `/agents/runs/${encodeURIComponent(id)}/approve`, { body: { text } });
+  }
+
+  discardAgentRun(id: string) {
+    return this.request<any>('POST', `/agents/runs/${encodeURIComponent(id)}/discard`);
   }
 
   createInboxAddress(input: { prefix?: string; domain: string }) {

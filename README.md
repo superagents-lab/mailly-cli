@@ -74,7 +74,7 @@ In order of precedence:
 | `send`, `status` | Send email; multi-recipient sends and campaigns are queued and return a task ID |
 | `inbox` | Inbox addresses, threads, message content, replies, attachments, and inbox webhooks |
 | `outbox`, `delivery-events`, `webhooks` | Per-recipient sent messages, delivery events, and signed delivery webhooks |
-| `drafts`, `agents` | Drafts for human review, and hosted agent profiles and skills |
+| `drafts`, `agents` | Drafts for human review, hosted agent profiles and skills, agent runs, and approving or discarding agent drafts |
 | `templates`, `workflows`, `events` | Versioned templates and lifecycle workflows triggered by events |
 | `contacts`, `audiences`, `campaigns` | Contacts, CSV import, suppression, audiences, and campaigns |
 | `preferences`, `marketing-settings` | Recipient subscription state and marketing footer identity |

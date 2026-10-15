@@ -660,3 +660,20 @@ mailly agents show <agent-id> --json | jq '.agent.skills_json // "[]" | fromjson
 ```
 
 Skills 接口依赖服务端迁移 `0038_agent_skills.sql` 和配套代码；目标 Server 尚未升级时，请先升级服务端或指向本地 Server 验证。
+
+### Agent 评估记录与草稿审批
+
+托管 Agent 每处理一封来信生成一条 run，包含评估结论；`draft` 模式下还会起草回复，等人审批。
+
+```bash
+mailly agents runs list --approval-status pending --json
+mailly agents runs list --agent-id <agent-id> --thread-id <thread-id> --limit 20 --json
+mailly agents runs show <run-id> --json
+mailly agents runs approve <run-id> --text-file ./reply.txt --yes --json
+mailly agents runs approve <run-id> --text-file - --yes --json < ./reply.txt
+mailly agents runs discard <run-id> --json
+```
+
+- `list` 支持 `--agent-id / --thread-id / --email-id / --status / --approval-status / --limit`（1–200，默认 100）；`--approval-status pending` 找出待审批的草稿。
+- `approve` 把 `--text-file` 中的文本作为回复发出，必须是人类已核对过的最终全文，并带上 `--yes`。先用 `show` 读出 `draft_text` 给人类看，确认收件人和正文后再发送；同一 run 重复批准不会再发第二封。run 仍在处理中或已不在待审批状态时返回 409。
+- `discard` 放弃草稿，不发送。
