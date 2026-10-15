@@ -30,6 +30,8 @@ mailly agents update <agent-id> --skills-file ./skills.json --json
 mailly agents update <agent-id> --skills-file - --json < ./skills.json
 mailly agents update <agent-id> --unbind-address --json
 mailly agents update <agent-id> --clear-skills --json
+mailly agents update <agent-id> --summary-prompt "用中文写一句话摘要，写清截止时间。" --json
+mailly agents update <agent-id> --reset-summary-prompt --json
 ```
 
 创建时只要求 `--name`；省略模式默认为 `off`，Skills 默认为空。更新只提交明确提供的字段，省略 Skills、人设、白名单或地址时保留原值。`--mode` 支持 `off / summarize / draft`。
@@ -37,7 +39,8 @@ mailly agents update <agent-id> --clear-skills --json
 - `--persona <text>` 或 `--persona-file <path>`：人设与业务说明，文件为 UTF-8，路径 `-` 读 stdin；`--persona ""` 清空。
 - `--address-id <id>`：绑定收件地址；更新时 `--unbind-address` 解除绑定。
 - `--allowed-senders <senders...>`：替换白名单，支持邮箱或 `@域名`；更新时 `--clear-allowed-senders` 清空，允许全部发件人。
-- `--skills-file <path>`：读取 JSON 数组，**整体替换**该 Agent 的 Skills；`[]` 或更新时 `--clear-skills` 删除全部。修改单个技能时应保留文件中的其他技能及其 ID。两个文件选项不能同时读 stdin。
+- `--summary-prompt <text>` 或 `--summary-prompt-file <path>`：每封来信的总结提示词，最多 4000 字符，路径 `-` 读 stdin。不设置时使用默认提示词，默认随 Web 工作台的界面语言切换；设置后以自定义为准，切换语言不会改动。更新时 `--reset-summary-prompt` 恢复默认。`agents show` 显示当前实际使用的提示词。
+- `--skills-file <path>`：读取 JSON 数组，**整体替换**该 Agent 的 Skills；`[]` 或更新时 `--clear-skills` 删除全部。修改单个技能时应保留文件中的其他技能及其 ID。多个文件选项中只能有一个读 stdin。
 
 技能全部由用户录入。文件中每项字段为 `id / name / description / instructions / enabled`，例如以下格式示意（请填写自己的内容）：
 
