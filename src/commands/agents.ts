@@ -70,7 +70,7 @@ async function profileInput(opts: AgentOptions): Promise<AgentInput> {
 }
 
 export function registerAgents(program: Command) {
-  const agents = program.command('agents').description('List, create, and update agent profiles and user skills');
+  const agents = program.command('agents').description('Manage agent profiles and skills, and review what agents drafted');
   agents.command('list', { isDefault: true }).action(async (_opts, command) => {
     const res = await (await clientFor(command)).listAgents();
     if (getOutputFormat() === 'json') return printJSON(res);
@@ -113,4 +113,57 @@ export function registerAgents(program: Command) {
       if (getOutputFormat() === 'json') return printJSON(res);
       success(`Agent ${id} updated`);
     });
+
+  const runs = agents.command('runs').description('Agent runs (one per handled email) and the reply drafts waiting for review');
+  runs.command('list', { isDefault: true })
+    .option('--agent-id <id>', 'Only runs of this agent')
+    .option('--thread-id <id>', 'Only runs in this email thread')
+    .option('--email-id <id>', 'Only the run for this email')
+    .option('--status <status>', 'Run status, such as running / done / failed')
+    .option('--approval-status <status>', 'pending finds drafts waiting for review')
+    .option('--limit <n>', 'Maximum runs to return (1-200, default 100)')
+    .action(async (opts, command) => {
+      let limit: number | undefined;
+      if (opts.limit !== undefined) {
+        limit = Number(opts.limit);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) throw new Error('--limit must be an integer from 1 to 200');
+      }
+      const res = await (await clientFor(command)).listAgentRuns({
+        agent_id: opts.agentId, thread_id: opts.threadId, email_id: opts.emailId,
+        status: opts.status, approval_status: opts.approvalStatus, limit,
+      });
+      if (getOutputFormat() === 'json') return printJSON(res);
+      if (!res.runs.length) return info('No runs');
+      printTable(['ID', 'Agent', 'Status', 'Draft', 'From', 'Subject'], res.runs.map((run) => [
+        run.id, run.agent_name ?? run.agent_id, run.status, run.approval_status ?? '-', run.from_address ?? '-', run.subject ?? '-',
+      ]));
+    });
+
+  runs.command('show').argument('<run-id>').action(async (id, _opts, command) => {
+    const res = await (await clientFor(command)).getAgentRun(id);
+    if (getOutputFormat() === 'json') return printJSON(res);
+    const run = res.run;
+    info(`Run ${run.id} · ${run.status}`);
+    info(`Draft: ${run.approval_status ?? 'none'}`);
+    if (run.error) info(`Error: ${run.error}`);
+    info(`Summary:\n${run.summary || 'none'}`);
+    info(`Draft text:\n${run.draft_text || 'none'}`);
+  });
+
+  runs.command('approve').argument('<run-id>')
+    .requiredOption('--text-file <path>', 'Exact final reply text the human reviewed (UTF-8); use - to read from stdin')
+    .requiredOption('--yes', 'Confirm sending this text as the reply')
+    .action(async (id, opts: { textFile: string }, command) => {
+      const text = opts.textFile === '-' ? await readStdin() : await readFile(opts.textFile, 'utf8');
+      if (!text.trim() || text.length > 512 * 1024) throw new Error('Reply text must be non-empty and at most 512K characters');
+      const res = await (await clientFor(command)).approveAgentRun(id, text);
+      if (getOutputFormat() === 'json') return printJSON(res);
+      success(`Reply sent for run ${id}`);
+    });
+
+  runs.command('discard').argument('<run-id>').action(async (id, _opts, command) => {
+    const res = await (await clientFor(command)).discardAgentRun(id);
+    if (getOutputFormat() === 'json') return printJSON(res);
+    success(`Draft of run ${id} discarded`);
+  });
 }

@@ -116,3 +116,48 @@ test('server validation errors surface as JSON and nonzero exit', async (t) => {
   });
   assert.equal(requests.length, 1);
 });
+
+test('runs list passes filters, show/discard escape IDs, approve sends the reviewed text', async (t) => {
+  const { requests, dir, run } = await fixture(t, { success: true, runs: [] });
+  assert.deepEqual(JSON.parse((await run(['runs'])).stdout), { success: true, runs: [] });
+  assert.equal(requests[0].path, '/agents/runs');
+  await run(['runs', 'list', '--agent-id', 'agent-1', '--approval-status', 'pending', '--limit', '20']);
+  assert.equal(requests[1].path, '/agents/runs?agent_id=agent-1&approval_status=pending&limit=20');
+  await run(['runs', 'show', 'r/1']);
+  assert.deepEqual([requests[2].method, requests[2].path], ['GET', '/agents/runs/r%2F1']);
+  const reply = '您好，\n已收到，明天回复。\n';
+  await writeFile(join(dir, 'reply.txt'), reply);
+  await run(['runs', 'approve', 'run-1', '--text-file', join(dir, 'reply.txt'), '--yes']);
+  assert.deepEqual(requests[3], { method: 'POST', path: '/agents/runs/run-1/approve', auth: 'Bearer local-test-key', body: { text: reply } });
+  await run(['runs', 'approve', 'run-1', '--text-file', '-', '--yes'], reply);
+  assert.deepEqual(requests[4].body, { text: reply });
+  await run(['runs', 'discard', 'run-1']);
+  assert.deepEqual([requests[5].method, requests[5].path, requests[5].body], ['POST', '/agents/runs/run-1/discard', undefined]);
+});
+
+test('runs approve requires --yes and non-blank text; bad limit fails before the API', async (t) => {
+  const { requests, dir, run } = await fixture(t);
+  await writeFile(join(dir, 'reply.txt'), 'ok');
+  for (const [args, stdin] of [
+    [['runs', 'approve', 'run-1', '--text-file', join(dir, 'reply.txt')], ''],
+    [['runs', 'approve', 'run-1', '--yes'], ''],
+    [['runs', 'approve', 'run-1', '--text-file', '-', '--yes'], '   \n'],
+    [['runs', 'list', '--limit', '0'], ''],
+    [['runs', 'list', '--limit', 'abc'], ''],
+  ]) {
+    await assert.rejects(run(args, stdin), (error) => {
+      assert.equal(error.code, 1);
+      assert.equal(JSON.parse(error.stdout).success, false);
+      return true;
+    });
+  }
+  assert.deepEqual(requests, []);
+});
+
+test('approve surfaces a 409 from the server', async (t) => {
+  const { run } = await fixture(t, { success: false, error: 'This draft is no longer awaiting approval' }, 409);
+  await assert.rejects(run(['runs', 'approve', 'run-1', '--text-file', '-', '--yes'], 'hi'), (error) => {
+    assert.match(JSON.parse(error.stdout).error, /no longer awaiting approval/);
+    return true;
+  });
+});
