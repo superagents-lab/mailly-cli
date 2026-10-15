@@ -64,6 +64,12 @@ test('update preserves omitted fields, escapes IDs, reads stdin and explicitly c
   assert.deepEqual(requests[3].body, { persona_prompt: '', address_id: null, allowed_senders: [], skills: [] });
   await run(['update', 'agent-1', '--skills-file', '-'], '[]');
   assert.deepEqual(requests[4].body, { skills: [] });
+  await run(['update', 'agent-1', '--summary-prompt', '只写一句话。']);
+  assert.deepEqual(requests[5].body, { summary_prompt: '只写一句话。' });
+  await run(['update', 'agent-1', '--summary-prompt-file', '-'], '# 总结\n写清截止时间。\n');
+  assert.deepEqual(requests[6].body, { summary_prompt: '# 总结\n写清截止时间。\n' });
+  await run(['update', 'agent-1', '--reset-summary-prompt']);
+  assert.deepEqual(requests[7].body, { summary_prompt: null });
 });
 
 test('invalid and conflicting inputs fail with JSON before contacting the API', async (t) => {
@@ -76,6 +82,10 @@ test('invalid and conflicting inputs fail with JSON before contacting the API', 
     ['update', 'a', '--skills-file', '-', '--clear-skills'],
     ['update', 'a', '--persona', 'text', '--persona-file', '-'],
     ['update', 'a', '--persona-file', '-', '--skills-file', '-'],
+    ['update', 'a', '--persona-file', '-', '--summary-prompt-file', '-'],
+    ['update', 'a', '--summary-prompt', 'x', '--summary-prompt-file', '-'],
+    ['update', 'a', '--summary-prompt', 'x', '--reset-summary-prompt'],
+    ['update', 'a', '--summary-prompt', 'x'.repeat(4001)],
     ['update', 'a', '--skills-file', join(dir, 'missing.json')],
   ]) {
     await assert.rejects(run(args), (error) => {

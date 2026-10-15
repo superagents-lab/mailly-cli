@@ -11,6 +11,7 @@ export interface AgentInput {
   address_id?: string | null;
   allowed_senders?: string[];
   skills?: unknown[];
+  summary_prompt?: string | null;
 }
 
 export interface AgentProfile {
@@ -22,6 +23,8 @@ export interface AgentProfile {
   bound_address: string | null;
   allowed_senders_json: string | null;
   skills_json?: string;
+  summary_prompt?: string | null;
+  effective_summary_prompt?: string;
 }
 
 export type InboxBodyFormat = 'text' | 'markdown' | 'html';
@@ -771,7 +774,7 @@ export class MaillyClient {
   }
 
   listAgents() {
-    return this.request<{ success: boolean; agents: AgentProfile[] }>('GET', '/agents');
+    return this.request<{ success: boolean; summary_locale?: string; agents: AgentProfile[] }>('GET', '/agents');
   }
 
   createAgent(input: AgentInput & { name: string }) {
