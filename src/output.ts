@@ -51,15 +51,15 @@ export function warn(message: string) {
   process.stderr.write(c.yellow('! ') + message + '\n');
 }
 
-export function fail(message: string): void {
+export function fail(message: string, exitCode = 1, details: Record<string, unknown> = {}): void {
   if (outputFormat === 'json') {
-    process.stdout.write(JSON.stringify({ success: false, error: message }) + '\n');
+    process.stdout.write(JSON.stringify({ success: false, error: message, ...details }) + '\n');
   } else {
     process.stderr.write(c.red('✖ ') + message + '\n');
   }
   // Let Node flush piped stdout/stderr before exiting. Calling process.exit()
   // here can truncate the JSON error envelope in non-interactive callers.
-  process.exitCode = 1;
+  process.exitCode = exitCode;
 }
 
 function visualWidth(s: string) {

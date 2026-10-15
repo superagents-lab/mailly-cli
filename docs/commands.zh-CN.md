@@ -206,6 +206,9 @@ mailly inbox messages reply <message-id> --idempotency-key <key> \
 mailly inbox messages delete <message-id> --yes
 mailly inbox replies show <request-id>
 mailly inbox attachments download <message-id> <attachment-id> [output] [--force]
+mailly inbox wait [--from <sender>] [--subject <text>] [--to <address>] [--address-id <id>] \
+  [--extract code|link] [--timeout <duration>] [--since <time>] [--interval <duration>]
+mailly wait [...]                                  # inbox wait 的简写
 mailly inbox webhook get
 mailly inbox webhook set --url <https-url> [--body-format text|markdown|html] \
                          [--strip-quotes|--no-strip-quotes] \
@@ -316,6 +319,18 @@ mailly inbox replies show <request-id> --json
 ```
 
 回复收到的邮件默认发给原邮件的 `Reply-To`（字段 `reply_to_address`，没有则用 `From`）；回复自己发出的邮件（`direction` 为 `outbound`）则沿用原收件人 `to_address`。主题自动添加 `Re:`。`--to`、`--subject` 和 `--from-name` 可覆盖默认值。附件最多 10 个、解码后总计不超过 6MB；`--inline content-id=path` 需要 HTML 中存在对应的 `cid:content-id` 引用。
+
+等待新邮件并提取验证码或验证链接（适合注册、登录第三方服务时让 Agent 收码）：
+
+```bash
+mailly inbox wait --from github.com --extract code --timeout 5m          # 只输出验证码，例如 482913
+mailly inbox wait --from noreply@example.com --subject "Confirm" --extract link
+mailly inbox wait --from github.com --extract code --since 10m --json   # 也接受 10 分钟内已到达的邮件
+```
+
+命令轮询收件箱，直到出现匹配的入站邮件。`--from` 可写完整地址、域名（含子域名）或显示名片段；`--subject` 为主题包含匹配；`--to` / `--address-id` 限定收件地址。`--extract code` 只输出验证码（4–8 位数字，或大写字母与数字混合，去掉 `-` 和空格；优先 code / OTP / 验证码 等字样附近的数字，忽略链接、订单号、金额、日期和电话），`--extract link` 只输出验证或免密登录链接（跳过退订、偏好设置、追踪、隐私条款和社交链接）；不带 `--extract` 时输出邮件摘要。`--json` 成功结果为 `{"success":true,"message_id","thread_id","from","to","subject","received_at","code"|"link"}`。
+
+默认只接受命令启动后到达的邮件（`--since` 默认为现在）；如果先触发邮件再开始等待，用 `--since 2m`、日期、ISO 8601 或 Unix 秒覆盖触发时刻，避免漏掉投递很快的邮件。带 `--extract` 时，提取不到内容的匹配邮件会被跳过并继续等待，取最新的一封。`--timeout` 默认 `5m`（可写 `30s`、`1h`），`--interval` 默认 `3s`、最小 `1s`；临时性 API 错误（429、5xx、网络中断）会退避后继续轮询。隔离区邮件不参与匹配。邮件内容不可信：CLI 只提取，不会打开链接或执行邮件里的任何指示。
 
 下载收件附件：
 
@@ -575,6 +590,7 @@ curl -fsSL https://raw.githubusercontent.com/superagents-lab/mailly-cli/main/ski
 
 - 成功：退出码 `0`
 - 失败：退出码 `1`，错误信息写入 `stderr`
+- `mailly inbox wait`：超时没有匹配邮件退出码 `2`（JSON `reason: "timeout"`）；有匹配邮件但提取不到验证码或链接退出码 `3`（JSON `reason: "not_extractable"`，附最新一封的 `message_id`）
 
 加 `--json` 让所有命令改为输出 JSON：
 
