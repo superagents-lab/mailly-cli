@@ -14,6 +14,7 @@ import {
 import { addMailSearchOptions } from '../search.js';
 import { getOutputFormat, info, printJSON, printTable, success, warn } from '../output.js';
 import { loadEmailAttachments } from '../attachments.js';
+import { addWaitCommand } from './wait.js';
 
 const INBOX_BODY_FORMATS = ['text', 'markdown', 'html'] as const;
 
@@ -387,6 +388,8 @@ export function registerInbox(program: Command) {
       if (getOutputFormat() === 'json') return printJSON(res);
       success(`Message ${messageId} deleted`);
     });
+
+  addWaitCommand(inbox);
 
   const threads = inbox.command('threads').description('Browse the inbox by thread');
 

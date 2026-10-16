@@ -22,6 +22,7 @@ import { registerContacts } from './commands/contacts.js';
 import { registerAudiences } from './commands/audiences.js';
 import { registerPreferences } from './commands/preferences.js';
 import { registerInbox } from './commands/inbox.js';
+import { registerWait } from './commands/wait.js';
 import { registerOutbox } from './commands/outbox.js';
 import { registerAgents } from './commands/agents.js';
 import { registerDrafts } from './commands/drafts.js';
@@ -57,6 +58,7 @@ export function createProgram() {
   registerDomains(program);
   registerDns(program);
   registerInbox(program);
+  registerWait(program);
   registerOutbox(program);
   registerAgents(program);
   registerDrafts(program);
