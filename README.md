@@ -123,7 +123,7 @@ curl -fsSL https://raw.githubusercontent.com/superagents-lab/mailly-cli/main/ski
   -o ~/.claude/skills/mailly/SKILL.md
 ```
 
-Mailly also provides a remote MCP server at `https://api.mailly.site/mcp` with OAuth sign-in. See the [integration docs](https://mailly.site/docs).
+Mailly also provides a remote MCP server at `https://mcp.mailly.site/mcp` with OAuth sign-in. See the [integration docs](https://mailly.site/docs).
 
 ## Development
 
