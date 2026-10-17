@@ -1,8 +1,6 @@
 # Mailly CLI command reference
 
-Setup steps and safety rules are in [SKILL.md](../SKILL.md). This reference is only for existing workflows the user separately requests and separately authorizes; it is not an automatic next step after setup, and setup must stop once the address is reported. The `setup_token` cannot be used with the commands below; never collect API keys in chat or scrape the console. Read only the sections the current task needs; there is no need to load every command during first-time setup.
-
-Setup is a public HTTP exception and adds no CLI command or MCP tool: with no authentication, `POST https://api.mailly.site/onboarding/start` with JSON `{"name":"chosen-name"}` reserves the name the human chose; ask first if it is unknown, and on 409 `code=name_taken` ask the human for another name with no blind or mass retries. Humans can also use the same API directly at https://mailly.site/onboard. After signing in or registering and verifying an external email, they explicitly bind that name within account quotas; never substitute an existing inbox or an auto-generated name, and there is no multi-inbox selection. A reservation creates neither a user nor a receiving inbox, and it is released after 30 minutes or on cancellation; anonymous receiving and reading are deferred. Full naming rules, response fields and the stopping rule are in SKILL.md.
+The rules for using the CLI are in [SKILL.md](../SKILL.md). Read only the sections the current task needs. To set up an inbox and get an API key without the CLI, follow https://mailly.site/auth.md.
 
 ### Account
 
@@ -16,7 +14,7 @@ mailly whoami --json                  # Current key (masked) + base URL + balanc
 mailly balance --json                 # Balance only: {"success":true,"balance":N}
 ```
 
-**Separate CLI authorization**: first-time setup uses the public HTTP flow in SKILL.md, which needs no CLI, returns no credentials or account access, and stops when done. Only when the user separately decides to connect the CLI and explicitly asks for it, use login to get an authorization link and resume it; never start it automatically as a setup fallback. You cannot perform the human's identity verification or authorization for them. Successful authentication does not mean the user approved any outgoing email.
+**Signing in**: if you already hold an API key (for example from https://mailly.site/auth.md), use `mailly login <api-key>`. Otherwise `mailly login` gives the human an authorization link to approve in their browser; you cannot perform the human's identity verification or authorization for them. Successful authentication does not mean the user approved any outgoing email.
 
 ### Agent profiles and user Skills
 
