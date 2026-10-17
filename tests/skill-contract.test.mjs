@@ -136,3 +136,10 @@ test('every option shown in a Mailly Skill command exists on that CLI command', 
   }
   assert.deepEqual(unknown, [], `Skill contains unknown CLI options:\n${unknown.join('\n')}`);
 });
+
+test('the published skill is English only', async () => {
+  // Agents fetch these files directly; keep them free of CJK text.
+  const cjk = /[　-〿㐀-䶿一-鿿＀-￯]/;
+  const offending = skillSource.split('\n').filter((line) => cjk.test(line));
+  assert.deepEqual(offending, [], `Skill contains non-English text:\n${offending.join('\n')}`);
+});

@@ -24,7 +24,6 @@ The human can receive and read mail in the authenticated web console and view AP
 
 Do not retrieve or scrape the human's console, collect API keys through chat, auto-authorize MCP/CLI as a fallback, or read the inbox immediately after setup. Report completion and stop even if the human has existing inboxes or an empty inbox. Do not fabricate delivery or automatically send a test email.
 
-中文：先询问人类想要的名称（3–64 个字符，不能用 admin、support、info、sys 等系统和官方用途名称），通过 HTTP 预留 30 分钟；名称冲突请人类另选，禁止盲目批量重试。也可直接在 https://mailly.site/onboard 开始，无需 Agent。人类用已验证外部邮箱登录或注册，再按账户额度明确绑定这个邮箱；不得替换为已有邮箱或自动名称，不提供多邮箱选择。预留不创建用户或收件邮箱，过期或取消释放名称，匿名收件和读信暂缓。临时令牌只查询本次开通；ready 不返回 API Key 或其他凭据。Agent 报告地址与完成后立即停止。用户可在已登录工作台收件、读信，在 `/app/developers` 查看 API Key，自行决定后续接入；禁止抓取工作台、在聊天收集密钥或自动发起 MCP/CLI 授权。
 
 ## Optional reference for separately authorized workflows
 

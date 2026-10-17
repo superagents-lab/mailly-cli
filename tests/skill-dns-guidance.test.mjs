@@ -6,20 +6,20 @@ import { test } from 'node:test';
 const maillySkillSource = await readFile(new URL('../skills/mailly/reference/commands.md', import.meta.url), 'utf8');
 
 test("Mailly skill requires CLI agents to explain the external DNS step", () => {
-  assert.match(maillySkillSource, /CLI 不会代用户修改 DNS/)
+  assert.match(maillySkillSource, /the CLI does not change DNS for the user/)
   assert.match(maillySkillSource, /DNS → Records → Add record/)
-  assert.match(maillySkillSource, /不要假设用户知道 MX 在哪里配置/)
+  assert.match(maillySkillSource, /do not assume the user knows where MX is configured/)
   assert.match(maillySkillSource, /mailly domains setup-outbound/)
   assert.match(maillySkillSource, /mailly domains verify-outbound/)
-  assert.match(maillySkillSource, /CNAME 必须关闭代理/)
+  assert.match(maillySkillSource, /CNAME proxy must be turned off/)
 })
 
 test("Mailly skill documents the Cloudflare one-click DNS flow without dropping manual guidance", () => {
   assert.match(maillySkillSource, /mailly dns set-token/)
   assert.match(maillySkillSource, /mailly domains apply-dns/)
   assert.match(maillySkillSource, /Zone \u2192 DNS \u2192 Edit/)
-  assert.match(maillySkillSource, /幂等/)
+  assert.match(maillySkillSource, /idempotent/)
   assert.match(maillySkillSource, /conflict/)
-  // 手动路径必须保留，供未保存 Token 或其他 DNS 服务商的用户使用。
-  assert.match(maillySkillSource, /未保存 Cloudflare Token 或 DNS 在其他服务商时，CLI 不会代用户修改 DNS/)
+  // The manual path must stay for users without a saved token or with another DNS provider.
+  assert.match(maillySkillSource, /Without a saved Cloudflare token, or when DNS is hosted elsewhere, the CLI does not change DNS for the user/)
 })
