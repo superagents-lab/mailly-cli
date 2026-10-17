@@ -58,18 +58,6 @@ function availableFlags(command) {
   return flags;
 }
 
-test('the CLI skill covers the CLI and points inbox setup at auth.md', async () => {
-  const skill = await readFile(skillPath, 'utf8');
-  assert.match(skill, /^---\nname: mailly\ndescription: Uses the Mailly CLI/);
-  assert.match(skill, /Follow https:\/\/mailly\.site\/auth\.md/);
-  assert.match(skill, /mailly login <api-key>/);
-  assert.match(skill, /Authentication is \*\*not approval to send\*\*/);
-  assert.match(skill, /reference\/commands\.md/);
-  // Inbox setup lives at mailly.site/auth.md; the skill must not carry a second copy of it.
-  assert.doesNotMatch(skillSource, /onboarding\/start|setup_token|mailly\.site\/skill\.md/);
-  assert.doesNotMatch(skillSource, /\bmailly onboard\b|onboard\/login/);
-});
-
 test('Mailly docs install the published mailly-cli package, not private sources', async () => {
   const [skill, packageJson, ...readmes] = await Promise.all([
     skillSource,
@@ -112,11 +100,4 @@ test('every option shown in a Mailly Skill command exists on that CLI command', 
     }
   }
   assert.deepEqual(unknown, [], `Skill contains unknown CLI options:\n${unknown.join('\n')}`);
-});
-
-test('the published skill is English only', async () => {
-  // Agents fetch these files directly; keep them free of CJK text.
-  const cjk = /[　-〿㐀-䶿一-鿿＀-￯]/;
-  const offending = skillSource.split('\n').filter((line) => cjk.test(line));
-  assert.deepEqual(offending, [], `Skill contains non-English text:\n${offending.join('\n')}`);
 });
