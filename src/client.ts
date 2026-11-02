@@ -54,7 +54,61 @@ export interface AgentRun {
 
 export type InboxBodyFormat = 'text' | 'markdown' | 'html';
 
-export interface InboxWebhookConfig {
+export interface InboxWebhookFilters {
+  toAddresses?: string[];
+  fromInclude?: string[];
+  fromExclude?: string[];
+  subjectInclude?: string[];
+  subjectExclude?: string[];
+  skipAutomated?: boolean;
+}
+
+/** Delivery settings shared by the default webhook and per-address endpoints. */
+export interface InboxWebhookDeliverySettings {
+  headers?: Array<{ name: string; valueHint: string }>;
+  payloadMode?: 'raw' | 'template';
+  template?: string | null;
+  bodyMaxChars?: number;
+  filters?: InboxWebhookFilters;
+  maxPerMinute?: number | null;
+  batchWindowSeconds?: number;
+  maxAttempts?: number;
+}
+
+/** Omitted fields keep their values; null resets to the default. Headers replace the whole list; a header without value keeps its stored value. */
+export interface InboxWebhookDeliveryInput {
+  headers?: Array<{ name: string; value?: string }>;
+  payloadMode?: 'raw' | 'template';
+  template?: string | null;
+  bodyMaxChars?: number | null;
+  filters?: InboxWebhookFilters | null;
+  maxPerMinute?: number | null;
+  batchWindowSeconds?: number | null;
+  maxAttempts?: number | null;
+}
+
+export interface InboxWebhookDelivery {
+  id: string;
+  /** whk_... for an address endpoint, "default" for the workspace default webhook */
+  endpointId: string;
+  url: string;
+  emailId: string;
+  subject: string | null;
+  from: string | null;
+  to: string | null;
+  status: 'pending' | 'delivering' | 'retrying' | 'delivered' | 'failed';
+  attemptCount: number;
+  nextAttemptAt: string | null;
+  lastAttemptAt: string | null;
+  deliveredAt: string | null;
+  responseStatus: number | null;
+  responseBody: string | null;
+  error: string | null;
+  batchId: string | null;
+  createdAt: string;
+}
+
+export interface InboxWebhookConfig extends InboxWebhookDeliverySettings {
   url: string;
   active: boolean;
   bodyFormat: InboxBodyFormat;
@@ -86,9 +140,11 @@ export interface InboxWebhookTestResult {
   error: string | null;
   durationMs: number;
   testedAt: string;
+  responseBody?: string | null;
+  requestBody?: string | null;
 }
 
-export interface InboxWebhookEndpointInput {
+export interface InboxWebhookEndpointInput extends InboxWebhookDeliveryInput {
   url?: string;
   active?: boolean;
   bodyFormat?: InboxBodyFormat;
@@ -1028,7 +1084,7 @@ export class MaillyClient {
     );
   }
 
-  setInboxWebhook(input: {
+  setInboxWebhook(input: InboxWebhookDeliveryInput & {
     url: string;
     bodyFormat?: InboxBodyFormat;
     stripQuotes?: boolean;
@@ -1048,6 +1104,21 @@ export class MaillyClient {
 
   testInboxWebhook() {
     return this.request<{ success: boolean; test: InboxWebhookTestResult }>('POST', '/inbox/webhook/test');
+  }
+
+  listInboxWebhookDeliveries(options: { endpointId?: string; status?: string; emailId?: string; limit?: number; cursor?: string } = {}) {
+    return this.request<{ success: boolean; deliveries: InboxWebhookDelivery[]; nextCursor: string | null }>(
+      'GET',
+      '/inbox/webhook/deliveries',
+      { query: { endpoint_id: options.endpointId, status: options.status, email_id: options.emailId, limit: options.limit, cursor: options.cursor } },
+    );
+  }
+
+  redeliverInboxWebhook(deliveryId: string) {
+    return this.request<{ success: boolean; delivery: InboxWebhookDelivery }>(
+      'POST',
+      `/inbox/webhook/deliveries/${encodeURIComponent(deliveryId)}/redeliver`,
+    );
   }
 
   listInboxWebhookEndpoints(addressId?: string) {

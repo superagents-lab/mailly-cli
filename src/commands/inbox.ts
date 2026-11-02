@@ -15,6 +15,7 @@ import { addMailSearchOptions } from '../search.js';
 import { getOutputFormat, info, printJSON, printTable, success, warn } from '../output.js';
 import { loadEmailAttachments } from '../attachments.js';
 import { addWaitCommand } from './wait.js';
+import { addDeliveryOptions, deliveryInputFrom, printDeliverySettings, registerDeliveryLog, type DeliveryOptions } from './inboxWebhookDelivery.js';
 
 const INBOX_BODY_FORMATS = ['text', 'markdown', 'html'] as const;
 
@@ -102,6 +103,7 @@ function printEndpoint(endpoint: InboxWebhookEndpoint) {
   info(`Status: ${endpoint.active ? 'active' : 'disabled'}`);
   info(`Body format: ${endpoint.bodyFormat}`);
   info(`Strip quotes: ${endpoint.stripQuotes ? 'on' : 'off'}`);
+  printDeliverySettings(endpoint);
   printLastTest(endpoint);
 }
 
@@ -118,6 +120,7 @@ function reportTestResult(test: InboxWebhookTestResult, url: string) {
   if (test.ok) success(`Test event delivered to ${url} (HTTP ${test.responseStatus}, ${test.durationMs} ms)`);
   else warn(`Test event failed for ${url}: ${test.error ?? `HTTP ${test.responseStatus}`} (${test.durationMs} ms)`);
   info(`Event ID: ${test.eventId}`);
+  if (test.responseBody) info(`Response: ${test.responseBody}`);
 }
 
 async function clientFor(command: Command): Promise<MaillyClient> {
@@ -512,20 +515,21 @@ export function registerInbox(program: Command) {
       info(`Body format: ${res.webhook.bodyFormat}`);
       info(`Strip quotes: ${res.webhook.stripQuotes ? 'on' : 'off'}`);
       info(`Events: ${res.webhook.events.join(', ')}`);
+      printDeliverySettings(res.webhook);
       printLastTest(res.webhook);
     });
 
-  webhook
+  addDeliveryOptions(webhook
     .command('set')
-    .description('Create or update the inbound webhook')
+    .description('Create or update the inbound webhook; omitted delivery settings keep their values')
     .requiredOption('--url <url>', 'Public HTTPS callback URL')
     .option('--body-format <format>', 'Pushed body format: text / markdown / html', parseInboxBodyFormat)
     .option('--strip-quotes', 'Strip quoted reply history added by mail clients when pushing')
     .option('--no-strip-quotes', 'Keep the full quoted history when pushing')
     .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters)')
-    .option('--rotate-secret', 'Generate a new signing secret')
+    .option('--rotate-secret', 'Generate a new signing secret'), { toFilter: true })
     .action(async (
-      opts: {
+      opts: DeliveryOptions & {
         url: string;
         bodyFormat?: InboxBodyFormat;
         stripQuotes?: boolean;
@@ -535,6 +539,7 @@ export function registerInbox(program: Command) {
       command: Command,
     ) => {
       const res = await (await clientFor(command)).setInboxWebhook({
+        ...(await deliveryInputFrom(opts)),
         url: opts.url.trim(),
         ...(opts.bodyFormat ? { bodyFormat: opts.bodyFormat } : {}),
         ...(typeof opts.stripQuotes === 'boolean' ? { stripQuotes: opts.stripQuotes } : {}),
@@ -545,6 +550,7 @@ export function registerInbox(program: Command) {
       success(`Inbound webhook configured: ${res.webhook.url}`);
       info(`Body format: ${res.webhook.bodyFormat}`);
       info(`Strip quotes: ${res.webhook.stripQuotes ? 'on' : 'off'}`);
+      printDeliverySettings(res.webhook);
       if (res.signingSecret) {
         warn('The signing secret is shown only once. Save it now:');
         info(res.signingSecret);
@@ -563,12 +569,14 @@ export function registerInbox(program: Command) {
 
   webhook
     .command('test')
-    .description('Send a signed webhook.test event to the default inbound webhook now (exits 1 if the endpoint does not return 2xx)')
+    .description('Send a sample email to the default inbound webhook now, exactly like a real delivery (template, headers, signature), and show the response (exits 1 if it does not return 2xx)')
     .action(async (_opts, command) => {
       const res = await (await clientFor(command)).testInboxWebhook();
       if (getOutputFormat() === 'json') printJSON(res);
       reportTestResult(res.test, 'the default webhook');
     });
+
+  registerDeliveryLog(webhook, clientFor);
 
   const endpoints = webhook
     .command('endpoints')
@@ -612,7 +620,7 @@ export function registerInbox(program: Command) {
       printEndpoint(res.endpoint);
     });
 
-  endpoints
+  addDeliveryOptions(endpoints
     .command('add')
     .alias('create')
     .description('Add a webhook endpoint to an inbox address (while it has an active endpoint, that address no longer uses the default webhook)')
@@ -621,9 +629,9 @@ export function registerInbox(program: Command) {
     .option('--body-format <format>', 'Pushed body format: text / markdown / html (default text)', parseInboxBodyFormat)
     .option('--strip-quotes', 'Strip quoted reply history added by mail clients when pushing')
     .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters); generated when omitted')
-    .option('--disable', 'Create the endpoint disabled')
+    .option('--disable', 'Create the endpoint disabled'), { toFilter: false })
     .action(async (
-      opts: {
+      opts: DeliveryOptions & {
         addressId: string;
         url: string;
         bodyFormat?: InboxBodyFormat;
@@ -634,6 +642,7 @@ export function registerInbox(program: Command) {
       command: Command,
     ) => {
       const res = await (await clientFor(command)).createInboxWebhookEndpoint({
+        ...(await deliveryInputFrom(opts)),
         addressId: opts.addressId,
         url: opts.url.trim(),
         ...(opts.bodyFormat ? { bodyFormat: opts.bodyFormat } : {}),
@@ -648,7 +657,7 @@ export function registerInbox(program: Command) {
       info(`Verify it with: mailly inbox webhook endpoints test ${res.endpoint.id}`);
     });
 
-  endpoints
+  addDeliveryOptions(endpoints
     .command('update')
     .alias('set')
     .description('Update a webhook endpoint; omitted options keep their current values')
@@ -660,10 +669,10 @@ export function registerInbox(program: Command) {
     .option('--enable', 'Enable the endpoint')
     .option('--disable', 'Disable the endpoint (the address falls back to the default webhook when none is active)')
     .option('--signing-secret <secret>', 'Custom signing secret (32-256 characters)')
-    .option('--rotate-secret', 'Generate a new signing secret')
+    .option('--rotate-secret', 'Generate a new signing secret'), { toFilter: false })
     .action(async (
       endpointId: string,
-      opts: {
+      opts: DeliveryOptions & {
         url?: string;
         bodyFormat?: InboxBodyFormat;
         stripQuotes?: boolean;
@@ -676,6 +685,7 @@ export function registerInbox(program: Command) {
     ) => {
       const active = activeFromOptions(opts);
       const input = {
+        ...(await deliveryInputFrom(opts)),
         ...(opts.url ? { url: opts.url.trim() } : {}),
         ...(opts.bodyFormat ? { bodyFormat: opts.bodyFormat } : {}),
         ...(typeof opts.stripQuotes === 'boolean' ? { stripQuotes: opts.stripQuotes } : {}),
@@ -704,7 +714,7 @@ export function registerInbox(program: Command) {
 
   endpoints
     .command('test')
-    .description('Send a signed webhook.test event to an endpoint now, even if disabled (exits 1 if it does not return 2xx)')
+    .description('Send a sample email to an endpoint now, even if disabled, exactly like a real delivery, and show the response (exits 1 if it does not return 2xx)')
     .argument('<endpoint-id>', 'Endpoint ID (whk_...)')
     .action(async (endpointId: string, _opts: unknown, command: Command) => {
       const res = await (await clientFor(command)).testInboxWebhookEndpoint(endpointId);
