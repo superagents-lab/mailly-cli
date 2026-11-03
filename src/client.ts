@@ -46,6 +46,7 @@ export interface AgentRun {
   approval_status: string | null;
   summary: string | null;
   draft_text: string | null;
+  draft_cc?: string[];
   subject?: string | null;
   from_address?: string | null;
   error?: string | null;
@@ -838,11 +839,11 @@ export class MaillyClient {
     return this.request<any>('GET', `/mail-drafts/${encodeURIComponent(id)}`);
   }
 
-  saveMailDraft(input: { anchor_email_id: string; text: string; idempotency_key: string }) {
+  saveMailDraft(input: { anchor_email_id: string; text: string; idempotency_key: string; cc?: string[]; reply_all?: boolean }) {
     return this.request<any>('POST', '/mail-drafts', { body: input });
   }
 
-  updateMailDraft(id: string, input: { text: string; revision: number }) {
+  updateMailDraft(id: string, input: { text: string; revision: number; cc?: string[] }) {
     return this.request<any>('PATCH', `/mail-drafts/${encodeURIComponent(id)}`, { body: input });
   }
 
@@ -874,8 +875,8 @@ export class MaillyClient {
     return this.request<{ success: boolean; run: AgentRun }>('GET', `/agents/runs/${encodeURIComponent(id)}`);
   }
 
-  approveAgentRun(id: string, text: string) {
-    return this.request<any>('POST', `/agents/runs/${encodeURIComponent(id)}/approve`, { body: { text } });
+  approveAgentRun(id: string, text: string, cc?: string[]) {
+    return this.request<any>('POST', `/agents/runs/${encodeURIComponent(id)}/approve`, { body: { text, ...(cc ? { cc } : {}) } });
   }
 
   discardAgentRun(id: string) {
@@ -982,6 +983,8 @@ export class MaillyClient {
 
   forwardInboxMessage(messageId: string, input: {
     to: string;
+    cc?: string[];
+    bcc?: string[];
     text?: string;
     html?: string;
     subject?: string;
@@ -998,6 +1001,8 @@ export class MaillyClient {
       thread_id?: string;
       request_id?: string;
       to?: string;
+      cc?: string[];
+      bcc?: string[];
       subject?: string;
       message_id?: string;
       idempotent_replay?: boolean;
@@ -1013,6 +1018,9 @@ export class MaillyClient {
     html?: string;
     subject?: string;
     to?: string;
+    cc?: string[];
+    bcc?: string[];
+    reply_all?: boolean;
     fromName?: string;
     attachments?: EmailAttachmentPayload[];
   }, idempotencyKey: string) {
@@ -1024,6 +1032,8 @@ export class MaillyClient {
       thread_id?: string;
       request_id?: string;
       to?: string;
+      cc?: string[];
+      bcc?: string[];
       subject?: string;
       message_id?: string;
       idempotent_replay?: boolean;

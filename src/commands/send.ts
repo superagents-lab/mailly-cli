@@ -6,6 +6,7 @@ import { c, getOutputFormat, info, printJSON, success, warn } from '../output.js
 import { readStdin } from '../stdin.js';
 import { readJsonInput } from './jsonInput.js';
 import { loadEmailAttachments } from '../attachments.js';
+import { collectAddresses } from '../addresses.js';
 
 interface SendOptions {
   to?: string[];
@@ -18,8 +19,8 @@ interface SendOptions {
   fromEmail?: string;
   fromName?: string;
   replyTo?: string;
-  cc?: string;
-  bcc?: string;
+  cc?: string[];
+  bcc?: string[];
   provider?: string;
   emailType?: 'transactional' | 'lifecycle' | 'marketing';
   marketing?: boolean;
@@ -112,8 +113,8 @@ export function registerSend(program: Command) {
     .option('-f, --from-email <email>', 'Sender email (required)')
     .option('-n, --from-name <name>', 'Sender display name')
     .option('--reply-to <email>', 'Reply-To address')
-    .option('--cc <email>', 'Cc (batch sends only)')
-    .option('--bcc <email>', 'Bcc (batch sends only)')
+    .option('--cc <email>', 'Cc address (repeatable or comma-separated; transactional only, each address is billed as a recipient)', collectAddresses, [] as string[])
+    .option('--bcc <email>', 'Bcc address, hidden from other recipients (repeatable or comma-separated; transactional only)', collectAddresses, [] as string[])
     .option('--provider <provider>', 'Email provider (chosen by the backend by default)')
     .option('--email-type <type>', 'Email type: transactional, lifecycle, or marketing (default transactional)')
     .option('--marketing', 'Shortcut for marketing sends (same as --email-type marketing)')
@@ -335,8 +336,8 @@ export function registerSend(program: Command) {
         fromEmail,
         fromName,
         replyTo: opts.replyTo,
-        cc: opts.cc,
-        bcc: opts.bcc,
+        ...(opts.cc?.length ? { cc: opts.cc.join(', ') } : {}),
+        ...(opts.bcc?.length ? { bcc: opts.bcc.join(', ') } : {}),
         provider: opts.provider,
         emailType,
         campaignKey: opts.campaignKey?.trim(),
