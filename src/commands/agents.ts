@@ -5,6 +5,7 @@ import { MaillyClient, type AgentInput } from '../client.js';
 import { getOutputFormat, info, printJSON, printTable, success } from '../output.js';
 import { readStdin } from '../stdin.js';
 import { readJsonInput } from './jsonInput.js';
+import { collectAddresses, formatAddresses } from '../addresses.js';
 
 interface AgentOptions {
   name?: string;
@@ -167,16 +168,22 @@ export function registerAgents(program: Command) {
     info(`Draft: ${run.approval_status ?? 'none'}`);
     if (run.error) info(`Error: ${run.error}`);
     info(`Summary:\n${run.summary || 'none'}`);
+    if (run.draft_cc?.length) info(`Draft Cc: ${formatAddresses(run.draft_cc)}`);
     info(`Draft text:\n${run.draft_text || 'none'}`);
   });
 
   runs.command('approve').argument('<run-id>')
     .requiredOption('--text-file <path>', 'Exact final reply text the human reviewed (UTF-8); use - to read from stdin')
     .requiredOption('--yes', 'Confirm sending this text as the reply')
-    .action(async (id, opts: { textFile: string }, command) => {
+    .option('--cc <email>', 'Replace the drafted Cc (repeatable or comma-separated)', collectAddresses, [] as string[])
+    .option('--without-cc', 'Send without the drafted Cc')
+    .action(async (id, opts: { textFile: string; cc: string[]; withoutCc?: boolean }, command) => {
+      if (opts.withoutCc && opts.cc.length) throw new Error('Use either --cc or --without-cc');
       const text = opts.textFile === '-' ? await readStdin() : await readFile(opts.textFile, 'utf8');
       if (!text.trim() || text.length > 512 * 1024) throw new Error('Reply text must be non-empty and at most 512K characters');
-      const res = await (await clientFor(command)).approveAgentRun(id, text);
+      // Without --cc/--without-cc the run's drafted Cc is sent as shown by `agents runs show`
+      const cc = opts.withoutCc ? [] : opts.cc.length ? opts.cc : undefined;
+      const res = await (await clientFor(command)).approveAgentRun(id, text, cc);
       if (getOutputFormat() === 'json') return printJSON(res);
       success(`Reply sent for run ${id}`);
     });

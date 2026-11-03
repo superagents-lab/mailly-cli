@@ -14,6 +14,7 @@ import {
 import { addMailSearchOptions } from '../search.js';
 import { getOutputFormat, info, printJSON, printTable, success, warn } from '../output.js';
 import { loadEmailAttachments } from '../attachments.js';
+import { collectAddresses } from '../addresses.js';
 import { addWaitCommand } from './wait.js';
 import { addDeliveryOptions, deliveryInputFrom, printDeliverySettings, registerDeliveryLog, type DeliveryOptions } from './inboxWebhookDelivery.js';
 
@@ -280,6 +281,9 @@ export function registerInbox(program: Command) {
     .option('--html <html>', 'HTML reply body')
     .option('--html-file <path>', 'Read the HTML reply body from a file')
     .option('--to <email>', 'Override the reply recipient')
+    .option('--all', 'Reply all: also Cc the original To/Cc recipients, excluding your own address')
+    .option('--cc <email>', 'Cc address (repeatable or comma-separated; each is billed as a recipient)', collectAddresses, [] as string[])
+    .option('--bcc <email>', 'Bcc address, hidden from other recipients (repeatable or comma-separated)', collectAddresses, [] as string[])
     .option('--subject <subject>', 'Override the generated Re: subject')
     .option('--from-name <name>', 'Sender display name')
     .option('--attachment <path>', 'Attach a local file (repeatable; up to 10 files / 6MB total)', (v, p: string[]) => [...p, v], [] as string[])
@@ -293,6 +297,9 @@ export function registerInbox(program: Command) {
         html?: string;
         htmlFile?: string;
         to?: string;
+        all?: boolean;
+        cc: string[];
+        bcc: string[];
         subject?: string;
         fromName?: string;
         attachment?: string[];
@@ -312,6 +319,9 @@ export function registerInbox(program: Command) {
         ...(text ? { text } : {}),
         ...(html ? { html } : {}),
         ...(opts.to ? { to: opts.to.trim() } : {}),
+        ...(opts.all ? { reply_all: true } : {}),
+        ...(opts.cc.length ? { cc: opts.cc } : {}),
+        ...(opts.bcc.length ? { bcc: opts.bcc } : {}),
         ...(opts.subject ? { subject: opts.subject } : {}),
         ...(opts.fromName ? { fromName: opts.fromName } : {}),
         ...(attachments.length ? { attachments } : {}),
@@ -322,6 +332,8 @@ export function registerInbox(program: Command) {
         return;
       }
       success(`Reply sent${res.to ? ` to ${res.to}` : ''}`);
+      if (res.cc?.length) info(`Cc: ${res.cc.join(', ')}`);
+      if (res.bcc?.length) info(`Bcc: ${res.bcc.join(', ')}`);
       if (res.request_id) info(`Request ID: ${res.request_id}`);
       if (res.thread_id) info(`Thread ID: ${res.thread_id}`);
     });
@@ -331,6 +343,8 @@ export function registerInbox(program: Command) {
     .description('Forward a message from the original inbox address (counts toward email usage); original attachments are included by default')
     .argument('<message-id>', 'ID of the message to forward')
     .requiredOption('--to <email>', 'Forward to this address')
+    .option('--cc <email>', 'Cc address (repeatable or comma-separated; each is billed as a recipient)', collectAddresses, [] as string[])
+    .option('--bcc <email>', 'Bcc address, hidden from other recipients (repeatable or comma-separated)', collectAddresses, [] as string[])
     .requiredOption('--idempotency-key <key>', 'Stable idempotency key for the forward (8-200 characters)')
     .option('--text <text>', 'Plain-text note (placed above the forwarded content)')
     .option('--text-file <path>', 'Read the plain-text note from a file')
@@ -344,6 +358,8 @@ export function registerInbox(program: Command) {
       messageId: string,
       opts: {
         to: string;
+        cc: string[];
+        bcc: string[];
         idempotencyKey: string;
         text?: string;
         textFile?: string;
@@ -364,6 +380,8 @@ export function registerInbox(program: Command) {
       const attachments = await loadEmailAttachments(opts.attachment, []);
       const res = await (await clientFor(command)).forwardInboxMessage(messageId, {
         to: opts.to.trim(),
+        ...(opts.cc.length ? { cc: opts.cc } : {}),
+        ...(opts.bcc.length ? { bcc: opts.bcc } : {}),
         ...(text ? { text } : {}),
         ...(html ? { html } : {}),
         ...(opts.subject ? { subject: opts.subject } : {}),
@@ -377,6 +395,8 @@ export function registerInbox(program: Command) {
         return;
       }
       success(`Forwarded to ${res.to ?? opts.to}`);
+      if (res.cc?.length) info(`Cc: ${res.cc.join(', ')}`);
+      if (res.bcc?.length) info(`Bcc: ${res.bcc.join(', ')}`);
       if (res.request_id) info(`Request ID: ${res.request_id}`);
       if (res.thread_id) info(`Thread ID: ${res.thread_id}`);
     });

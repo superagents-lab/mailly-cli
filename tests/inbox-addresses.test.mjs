@@ -839,3 +839,43 @@ test('mailly send exposes attachment and thread fields for a single direct recip
     filename: 'payload.json', mimeType: 'application/json', contentBase64: Buffer.from('{"ok":true}').toString('base64'),
   }]);
 });
+
+test('reply all, cc and bcc reach reply, forward, send, drafts and agent approval', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mailly-cli-cc-'));
+  const draftPath = join(directory, 'draft.json');
+  const textPath = join(directory, 'reply.txt');
+  await writeFile(draftPath, JSON.stringify({ anchor_email_id: 'e1', text: 'Hi all', idempotency_key: 'draft-cc-1', reply_all: true, cc: ['dan@example.com'] }));
+  await writeFile(textPath, 'Approved text');
+  const received = [];
+  const baseUrl = await startMockServer(t, async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    received.push({ method: request.method, url: request.url, body: chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : undefined });
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ success: true, status: 'completed', to: 'sender@example.com', cc: ['jane@example.com'], bcc: [] }));
+  });
+
+  await runCli(baseUrl, ['inbox', 'messages', 'reply', 'm1', '--text', 'Hi', '--all', '--cc', 'A@example.com,b@example.com', '--cc', 'a@example.com', '--bcc', 'c@example.com', '--idempotency-key', 'reply-cc-0001', '--json']);
+  assert.deepEqual(received.at(-1).body, { text: 'Hi', reply_all: true, cc: ['a@example.com', 'b@example.com'], bcc: ['c@example.com'] });
+
+  await runCli(baseUrl, ['inbox', 'messages', 'reply', 'm1', '--text', 'Hi', '--idempotency-key', 'reply-cc-0002', '--json']);
+  assert.deepEqual(received.at(-1).body, { text: 'Hi' }, 'a plain reply sends no cc fields');
+
+  await runCli(baseUrl, ['inbox', 'messages', 'forward', 'm1', '--to', 'you@example.com', '--cc', 'lead@example.com', '--bcc', 'audit@example.com', '--idempotency-key', 'forward-cc-01', '--json']);
+  assert.deepEqual([received.at(-1).body.cc, received.at(-1).body.bcc], [['lead@example.com'], ['audit@example.com']]);
+
+  await runCli(baseUrl, ['send', '--to', 'you@example.com', '--from-email', 'me@example.com', '--subject', 'Hi', '--text', 'Body', '--cc', 'a@example.com', '--cc', 'b@example.com', '--bcc', 'c@example.com', '--json']);
+  const send = received.find((call) => call.url === '/send-email');
+  assert.equal(send.body.cc, 'a@example.com, b@example.com');
+  assert.equal(send.body.bcc, 'c@example.com');
+
+  await runCli(baseUrl, ['drafts', 'save', '--input', draftPath, '--json']);
+  assert.deepEqual(received.at(-1).body, { anchor_email_id: 'e1', text: 'Hi all', idempotency_key: 'draft-cc-1', reply_all: true, cc: ['dan@example.com'] });
+
+  await runCli(baseUrl, ['agents', 'runs', 'approve', 'run-1', '--text-file', textPath, '--yes', '--json']);
+  assert.deepEqual(received.at(-1).body, { text: 'Approved text' }, 'without --cc the drafted Cc is kept');
+  await runCli(baseUrl, ['agents', 'runs', 'approve', 'run-1', '--text-file', textPath, '--cc', 'lead@example.com', '--yes', '--json']);
+  assert.deepEqual(received.at(-1).body, { text: 'Approved text', cc: ['lead@example.com'] });
+  await runCli(baseUrl, ['agents', 'runs', 'approve', 'run-1', '--text-file', textPath, '--without-cc', '--yes', '--json']);
+  assert.deepEqual(received.at(-1).body, { text: 'Approved text', cc: [] });
+});
